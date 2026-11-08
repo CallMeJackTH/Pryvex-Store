@@ -237,17 +237,16 @@ async function reviewTopup(id,approve,noteOverride){
 async function addProduct(e){
  e.preventDefault();if(!isAdmin)return;
  const form=e.currentTarget,button=form.querySelector('button[type="submit"]'),oldText=button.textContent;
+ if(button.disabled)return;
  const f=new FormData(form),stock=f.get('stock');
- let imageUrl=f.get('image_url')||null;
- const imageFile=f.get('image_file');
- if(imageFile&&imageFile.size){
-  try{imageUrl=await uploadProductImage(imageFile)}catch(err){toast(readableError(err));return}
- }
  const price=Number(f.get('price')),stockValue=stock===''?null:Number(stock);
  if(!String(f.get('name')||'').trim()||!Number.isFinite(price)||price<0||(!Number.isInteger(stockValue)&&stockValue!==null)||(stockValue!==null&&stockValue<0)){toast('กรุณาตรวจสอบชื่อ ราคา และจำนวนสต็อก');return}
- const row={name:String(f.get('name')).trim(),price,category:f.get('category')||'ทั่วไป',description:f.get('description')||'',image_url:imageUrl,stock:stockValue,delivery_type:f.get('delivery_type'),delivery_payload:f.get('delivery_payload')||null,is_active:true};
  setBusy(button,true,'กำลังเพิ่มสินค้า...',oldText);
  try{
+  let imageUrl=f.get('image_url')||null;
+  const imageFile=f.get('image_file');
+  if(imageFile&&imageFile.size)imageUrl=await withTimeout(uploadProductImage(imageFile),30000,'อัปโหลดรูปสินค้าใช้เวลานานเกินไป');
+  const row={name:String(f.get('name')).trim(),price,category:f.get('category')||'ทั่วไป',description:f.get('description')||'',image_url:imageUrl,stock:stockValue,delivery_type:f.get('delivery_type'),delivery_payload:f.get('delivery_payload')||null,is_active:true};
   const {error}=await withTimeout(supabase.from('store_products').insert(row),20000,'เพิ่มสินค้าใช้เวลานานเกินไป');
   if(error)throw error;
   form.reset();toast('เพิ่มสินค้าแล้ว');await loadProducts();await loadAdmin();
@@ -279,20 +278,25 @@ async function editProduct(id){
 }
 async function saveProductEdit(e){
  e.preventDefault();if(!isAdmin)return;
- const f=e.currentTarget, data=new FormData(f), id=data.get('id');
+ const f=e.currentTarget,button=f.querySelector('button[type="submit"]'),oldText=button.textContent;
+ if(button.disabled)return;
+ const data=new FormData(f),id=data.get('id');
  let nextStock=data.get('stock')===''?null:Number(data.get('stock'));
  const stockToAdd=Number(data.get('stock_add')||0),oldStock=data.get('current_stock');
  if(!Number.isInteger(stockToAdd)||stockToAdd<0){toast('จำนวนที่เพิ่มต้องเป็นเลขจำนวนเต็มตั้งแต่ 0 ขึ้นไป');return}
  if(stockToAdd>0){if(oldStock===''){toast('สินค้านี้ตั้งค่าเป็นสต็อกไม่จำกัด ให้กำหนดจำนวนสต็อกใหม่แทน');return}nextStock=Number(oldStock)+stockToAdd;}
  const row={name:String(data.get('name')||'').trim(),price:Number(data.get('price')),category:data.get('category')||'ทั่วไป',description:data.get('description')||'',stock:nextStock,delivery_type:data.get('delivery_type'),delivery_payload:data.get('delivery_payload')||null,is_active:f.elements.is_active.checked,updated_at:new Date().toISOString()};
  if(!row.name||!Number.isFinite(row.price)||row.price<0||(!Number.isInteger(row.stock)&&row.stock!==null)||(row.stock!==null&&row.stock<0)){toast('กรุณาตรวจสอบชื่อ ราคา และจำนวนสต็อก');return}
+ setBusy(button,true,'กำลังบันทึก...',oldText);
  try{
   const file=f.elements.image_file.files[0];
-  if(file&&file.size)row.image_url=await uploadProductImage(file);
+  if(file&&file.size)row.image_url=await withTimeout(uploadProductImage(file),30000,'อัปโหลดรูปสินค้าใช้เวลานานเกินไป');
   else row.image_url=data.get('image_url')||null;
- }catch(err){toast(err.message);return}
- const button=f.querySelector('button[type="submit"]'),oldText=button.textContent;setBusy(button,true,'กำลังบันทึก...',oldText);
- try{const {error}=await withTimeout(supabase.from('store_products').update(row).eq('id',id),20000,'บันทึกสินค้าใช้เวลานานเกินไป');if(error)throw error;$('editProductModal').classList.add('hidden');toast('บันทึกสินค้าและสต็อกแล้ว');await loadProducts();await loadAdmin()}catch(error){toast('บันทึกสินค้าไม่สำเร็จ: '+readableError(error))}finally{setBusy(button,false,'',oldText)}
+  const {error}=await withTimeout(supabase.from('store_products').update(row).eq('id',id),20000,'บันทึกสินค้าใช้เวลานานเกินไป');
+  if(error)throw error;
+  $('editProductModal').classList.add('hidden');toast('บันทึกสินค้าและสต็อกแล้ว');await loadProducts();await loadAdmin();
+ }catch(error){toast('บันทึกสินค้าไม่สำเร็จ: '+readableError(error))}
+ finally{setBusy(button,false,'',oldText)}
 }
 async function deleteProduct(id){if(!confirm('ต้องการลบสินค้านี้หรือไม่?'))return;try{const {error}=await supabase.from('store_products').delete().eq('id',id);if(error)throw error;toast('ลบสินค้าแล้ว');await loadProducts();await loadAdmin()}catch(error){toast('ลบสินค้าไม่สำเร็จ: '+readableError(error))}}
 $('loginBtn').addEventListener('click',async()=>{const {error}=await supabase.auth.signInWithOAuth({provider:'discord',options:{redirectTo:location.origin}});if(error)toast(error.message)});
