@@ -207,8 +207,14 @@ async function retrySlipVerification(id){
  setBusy(button,true,'กำลังตรวจ...',oldText);
  try{
   const result=await withTimeout(supabase.functions.invoke('verify-store-slip',{body:{topup_id:id}}),32000,'EasySlip ตอบกลับช้าเกินไป');
-  const data=result.data;
-  if(result.error)throw new Error(data?.error||data?.message||readableError(result.error,'Edge Function ตรวจสอบไม่สำเร็จ'));
+  let data=result.data;
+  if(result.error){
+   let detail=data?.error||data?.message;
+   if(!detail&&result.error.context?.clone){
+    try{const body=await result.error.context.clone().json();detail=body?.error||body?.message}catch{}
+   }
+   throw new Error(detail||readableError(result.error,'Edge Function ตรวจสอบไม่สำเร็จ'));
+  }
   if(data?.verification_status==='verified')toast('EasySlip ตรวจผ่านแล้ว รอ Admin อนุมัติ');
   else if(data?.verification_status==='failed')toast('EasySlip ไม่ผ่าน: '+(data?.error||data?.message||'กรุณาตรวจสอบสลิปเอง'));
   else if(data?.verification_status==='error')toast('EasySlip ขัดข้อง: '+(data?.error||data?.message||'ตรวจสอบไม่ได้ กรุณาตรวจการตั้งค่า API Key'));
