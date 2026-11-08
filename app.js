@@ -124,7 +124,8 @@ async function buyProduct(id,button){
  try{
   const {data,error}=await withTimeout(supabase.rpc('store_purchase_product',{p_product_id:id}),20000,'การสั่งซื้อใช้เวลานานเกินไป');
   if(error)throw error;
-  toast('ซื้อสินค้าสำเร็จ');
+  $('redeemModal').classList.remove('hidden');
+  $('redeemModal').setAttribute('aria-hidden','false');
   await Promise.all([loadProducts(),loadWallet(),loadOrders()]);
  }catch(error){toast('ซื้อสินค้าไม่สำเร็จ: '+readableError(error))}
  finally{setBusy(button,false,'',oldText)}
@@ -381,6 +382,9 @@ async function deleteProduct(id){if(!confirm('ต้องการลบสิ�
 $('loginBtn').addEventListener('click',async()=>{const button=$('loginBtn');setBusy(button,true,'กำลังเชื่อมต่อ Discord...','เข้าสู่ระบบ Discord');try{const {error}=await supabase.auth.signInWithOAuth({provider:'discord',options:{redirectTo:location.origin+location.pathname+location.search}});if(error)throw error}catch(error){toast('เข้าสู่ระบบไม่สำเร็จ: '+readableError(error));setBusy(button,false,'','เข้าสู่ระบบ Discord')}});
 $('logoutBtn').addEventListener('click',async()=>{const button=$('logoutBtn');setBusy(button,true,'กำลังออกจากระบบ...','ออกจากระบบ');try{const {error}=await supabase.auth.signOut();if(error)throw error;toast('ออกจากระบบแล้ว')}catch(error){toast('ออกจากระบบไม่สำเร็จ: '+readableError(error));setBusy(button,false,'','ออกจากระบบ')}});
 $('topupForm').addEventListener('submit',submitTopup);$('productForm').addEventListener('submit',addProduct);$('editProductForm').addEventListener('submit',saveProductEdit);
+$('closeRedeemModal').addEventListener('click',()=>$('redeemModal').classList.add('hidden'));
+$('openRedeemLink').addEventListener('click',()=>window.open('https://discord.gg/rVePFb4zZe','_blank','noopener,noreferrer'));
+$('redeemModal').addEventListener('click',e=>{if(e.target===$('redeemModal'))$('redeemModal').classList.add('hidden')});
 $('closeEditProduct').addEventListener('click',()=>$('editProductModal').classList.add('hidden'));
 $('cancelEditProduct').addEventListener('click',()=>$('editProductModal').classList.add('hidden'));
 $('manualReviewForm').addEventListener('submit',submitManualReview);
