@@ -84,7 +84,7 @@ async function loadProducts(){
   const {data,error}=await withTimeout(supabase.from('store_products').select('id,name,description,category,price,image_url,stock,delivery_type,is_active').eq('is_active',true).order('created_at',{ascending:false}),18000,'โหลดสินค้าใช้เวลานานเกินไป');
   if(error)throw error;
   $('productCount').textContent=(data?.length||0)+' รายการ';
-  target.innerHTML=data?.length?data.map(p=>'<article class="product-card">'+(p.image_url?'<img class="product-image" loading="lazy" decoding="async" src="'+esc(p.image_url)+'" alt="">':'<div class="product-image"></div>')+'<div class="product-body"><span class="eyebrow">'+esc(p.category||'ทั่วไป')+'</span><h3>'+esc(p.name)+'</h3><p>'+esc(p.description||'สินค้าดิจิทัลจาก Pryvex Store')+'</p><div class="product-meta"><strong class="price">'+money(p.price)+'</strong><button class="btn btn-primary" type="button" data-buy="'+p.id+'">ซื้อสินค้า</button></div></div></article>').join(''):'<div class="empty">ยังไม่มีสินค้าในร้าน</div>';
+  target.innerHTML=data?.length?data.map(p=>{const soldOut=p.stock!==null&&Number(p.stock)<=0;const stockText=p.stock===null?'พร้อมจำหน่าย':soldOut?'สินค้าหมด':'เหลือ '+Number(p.stock)+' ชิ้น';return '<article class="product-card">'+(p.image_url?'<img class="product-image" loading="lazy" decoding="async" src="'+esc(p.image_url)+'" alt="">':'<div class="product-image"></div>')+'<div class="product-body"><span class="eyebrow">'+esc(p.category||'ทั่วไป')+'</span><h3>'+esc(p.name)+'</h3><p>'+esc(p.description||'สินค้าดิจิทัลจาก Pryvex Store')+'</p><div class="stock-label '+(soldOut?'stock-empty':'')+'">'+stockText+'</div><div class="product-meta"><strong class="price">'+money(p.price)+'</strong><button class="btn btn-primary" type="button" data-buy="'+p.id+'" '+(soldOut?'disabled':'')+'>'+(soldOut?'สินค้าหมด':'ซื้อสินค้า')+'</button></div></div></article>'}).join(''):'<div class="empty">ยังไม่มีสินค้าในร้าน</div>';
  }catch(error){console.error('loadProducts:',error);$('productCount').textContent='โหลดไม่สำเร็จ';target.innerHTML='<div class="empty">โหลดสินค้าไม่สำเร็จ: '+esc(readableError(error))+' <button class="btn-mini" type="button" data-reload-products>ลองอีกครั้ง</button></div>'}
 }
 async function loadWallet(){
@@ -124,6 +124,17 @@ async function buyProduct(id,button){
  try{
   const {data,error}=await withTimeout(supabase.rpc('store_purchase_product',{p_product_id:id}),20000,'การสั่งซื้อใช้เวลานานเกินไป');
   if(error)throw error;
+  const deliveryBox=$('redeemDelivery');
+  const deliveryPayload=String(data?.delivery_payload||'').trim();
+  const deliveryType=String(data?.delivery_type||'');
+  if(deliveryPayload){
+   const heading=deliveryType==='license'?'คีย์สินค้าที่คุณได้รับ':'ข้อมูลสินค้าที่ซื้อ';
+   deliveryBox.innerHTML='<div class="redeem-delivery-heading">'+heading+'</div><pre class="redeem-key">'+esc(deliveryPayload)+'</pre><button class="btn-mini" type="button" data-copy="'+esc(deliveryPayload)+'">คัดลอกข้อมูล</button>';
+   deliveryBox.classList.remove('hidden');
+  }else{
+   deliveryBox.innerHTML='<div class="muted small">สินค้านี้ไม่มีคีย์อัตโนมัติ กรุณาติดต่อแอดมินเพื่อรับสินค้า</div>';
+   deliveryBox.classList.remove('hidden');
+  }
   $('redeemModal').classList.remove('hidden');
   $('redeemModal').setAttribute('aria-hidden','false');
   await Promise.all([loadProducts(),loadWallet(),loadOrders()]);
