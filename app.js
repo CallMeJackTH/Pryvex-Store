@@ -126,7 +126,7 @@ async function submitTopup(e){
   const topupId=insertResult.data.id;
   formElement.reset();
   toast('ส่งสลิปสำเร็จแล้ว! รายการถูกบันทึกและส่งให้แอดมินตรวจสอบ');
-  await loadWallet();
+  void loadWallet();
   // Automatic verification runs in the background; it never blocks the user's submission.
   void runAutoVerification(topupId);
  }catch(error){
@@ -304,7 +304,7 @@ $('logoutBtn').addEventListener('click',async()=>{await supabase.auth.signOut();
 $('topupForm').addEventListener('submit',submitTopup);$('productForm').addEventListener('submit',addProduct);$('editProductForm').addEventListener('submit',saveProductEdit);
 $('closeEditProduct').addEventListener('click',()=>$('editProductModal').classList.add('hidden'));
 $('cancelEditProduct').addEventListener('click',()=>$('editProductModal').classList.add('hidden'));
-$('manualReviewForm').addEventListener('submit',submitManualReview);$('refreshAdminTopups').addEventListener('click',loadAdmin);
+$('manualReviewForm').addEventListener('submit',submitManualReview);
 $('closeManualReview').addEventListener('click',()=>$('manualReviewModal').classList.add('hidden'));
 $('cancelManualReview').addEventListener('click',()=>$('manualReviewModal').classList.add('hidden'));
 document.addEventListener('click',e=>{const n=e.target.closest('[data-page]');if(n)page(n.dataset.page);const go=e.target.closest('[data-go]');if(go)page(go.dataset.go);const buy=e.target.closest('[data-buy]');if(buy)buyProduct(buy.dataset.buy,buy);const retry=e.target.closest('[data-retry-verify]');if(retry)retrySlipVerification(retry.dataset.retryVerify);const refreshAdmin=e.target.closest('#refreshAdminTopups');if(refreshAdmin)loadAdmin();const manual=e.target.closest('[data-manual-review]');if(manual)openManualReview(manual.dataset.manualReview,manual.dataset.slipUrl,manual.dataset.amount);const rev=e.target.closest('[data-review]');if(rev)reviewTopup(rev.dataset.review,rev.dataset.approve==='true');const edit=e.target.closest('[data-edit]');if(edit)editProduct(edit.dataset.edit);const del=e.target.closest('[data-delete]');if(del)deleteProduct(del.dataset.delete);const copy=e.target.closest('[data-copy]');if(copy){const value=copy.dataset.copy;if(navigator.clipboard?.writeText){navigator.clipboard.writeText(value).then(()=>toast('คัดลอกแล้ว')).catch(()=>toast('คัดลอกไม่สำเร็จ กรุณาคัดลอกด้วยตนเอง: '+value))}else toast('เบราว์เซอร์ไม่รองรับการคัดลอกอัตโนมัติ: '+value)}});
