@@ -7,6 +7,7 @@ let currentUser = null;
 let isAdmin = false;
 let adminLoadSequence = 0;
 let topupSubmitting = false;
+const activeReviews = new Set();
 
 function withTimeout(promise, ms, message) {
  return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms))]);
@@ -165,14 +166,14 @@ async function loadAdmin(){
  const topupsEl=$('adminTopups');
  topupsEl.innerHTML='<span class="muted">กำลังโหลดรายการเติมเงิน...</span>';
  try{
-  const {data:rows,error}=await supabase.from('store_topups')
+  const {data:rows,error}=await withTimeout(supabase.from('store_topups')
    .select('id,user_id,amount,payment_method,slip_path,created_at,verification_status,verification_amount,verification_reference,verification_duplicate,verification_receiver_match,verification_error,verification_result')
-   .eq('status','pending').order('created_at',{ascending:true});
+   .eq('status','pending').order('created_at',{ascending:true}),20000,'โหลดรายการเติมเงินใช้เวลานานเกินไป');
   if(error)throw error;
   const cards=await Promise.all((rows||[]).map(async r=>{
    let signedUrl=null,slipError='';
    if(r.slip_path){
-    const signed=await supabase.storage.from('store-slips').createSignedUrl(r.slip_path,1800);
+    const signed=await withTimeout(supabase.storage.from('store-slips').createSignedUrl(r.slip_path,1800),12000,'สร้างลิงก์สลิปใช้เวลานานเกินไป').catch(error=>({data:null,error}));
     signedUrl=signed.data?.signedUrl||null;
     slipError=signed.error?.message||'ไม่สามารถสร้างลิงก์ดูสลิปได้';
    }else slipError='ไม่พบตำแหน่งไฟล์สลิป';
@@ -205,25 +206,15 @@ async function retrySlipVerification(id){
  const oldText=button?.textContent||'ตรวจ EasySlip ซ้ำ';
  setBusy(button,true,'กำลังตรวจ...',oldText);
  try{
-  const {data,error}=await withTimeout(supabase.functions.invoke('verify-store-slip',{body:{topup_id:id}}),32000,'EasySlip ตอบกลับช้าเกินไป');
-  if(error)throw error;
+  const result=await withTimeout(supabase.functions.invoke('verify-store-slip',{body:{topup_id:id}}),32000,'EasySlip ตอบกลับช้าเกินไป');
+  const data=result.data;
+  if(result.error)throw new Error(data?.error||data?.message||readableError(result.error,'Edge Function ตรวจสอบไม่สำเร็จ'));
   if(data?.verification_status==='verified')toast('EasySlip ตรวจผ่านแล้ว รอ Admin อนุมัติ');
-  else if(data?.verification_status==='failed')toast('EasySlip พบข้อมูลไม่ตรง กรุณาตรวจสอบสลิป');
+  else if(data?.verification_status==='failed')toast('EasySlip ไม่ผ่าน: '+(data?.error||data?.message||'กรุณาตรวจสอบสลิปเอง'));
+  else if(data?.verification_status==='error')toast('EasySlip ขัดข้อง: '+(data?.error||data?.message||'ตรวจสอบไม่ได้ กรุณาตรวจการตั้งค่า API Key'));
   else toast(data?.error||data?.message||'EasySlip ยังตรวจสอบไม่ได้ — แอดมินตรวจเองได้');
  }catch(error){toast('ตรวจ EasySlip ไม่สำเร็จ: '+readableError(error))}
  finally{await loadAdmin()}
-}
-function openManualReview(id,slipUrl,amount){
- if(!isAdmin){toast('ไม่มีสิทธิ์เข้าถึง');return}
- if(!slipUrl){toast('ไม่พบลิงก์สลิป กรุณารีเฟรชรายการ');return}
- const form=$('manualReviewForm');
- form.reset();
- form.elements.topup_id.value=id;
- form.elements.amount.value=money(amount);
- const image=$('manualSlipImage');
- image.onerror=()=>{image.removeAttribute('src');toast('เปิดรูปสลิปไม่ได้ กรุณารีเฟรชรายการ หรือตรวจสิทธิ์ Storage')};
- image.src=slipUrl;
- $('manualReviewModal').classList.remove('hidden');
 }
 async function submitManualReview(e){
  e.preventDefault();if(!isAdmin)return;
@@ -240,14 +231,22 @@ async function submitManualReview(e){
  }finally{setBusy(button,false,'',oldText)}
 }
 async function reviewTopup(id,approve,noteOverride){
- const note=noteOverride??(prompt(approve?'หมายเหตุ (ถ้ามี)':'ระบุเหตุผลที่ปฏิเสธ')||'');
+ if(!isAdmin||activeReviews.has(id))return false;
+ const note=noteOverride??(approve?'อนุมัติโดยแอดมิน':'ปฏิเสธโดยแอดมิน');
+ activeReviews.add(id);
+ const button=document.querySelector('[data-review="'+CSS.escape(id)+'"]');
+ const oldText=button?.textContent||'บันทึกผล';
+ setBusy(button,true,'กำลังบันทึก...',oldText);
  try{
   const {data,error}=await withTimeout(supabase.rpc('store_review_topup',{p_topup_id:id,p_approve:approve,p_note:note}),20000,'บันทึกผลตรวจสอบใช้เวลานานเกินไป');
   if(error)throw error;
+  if(data?.status!==(approve?'approved':'rejected'))throw new Error('ฐานข้อมูลไม่ได้ยืนยันผลการตรวจสอบ');
   toast(approve?'อนุมัติรายการแล้ว เครดิตเข้ากระเป๋าแล้ว':'ปฏิเสธรายการแล้ว');
   await loadAdmin();
+  if(approve)void loadWallet();
   return true;
  }catch(error){toast('ดำเนินการไม่สำเร็จ: '+readableError(error));return false}
+ finally{activeReviews.delete(id);if(button?.isConnected)setBusy(button,false,'',oldText)}
 }
 async function addProduct(e){
  e.preventDefault();if(!isAdmin)return;
@@ -319,9 +318,9 @@ $('logoutBtn').addEventListener('click',async()=>{const button=$('logoutBtn');se
 $('topupForm').addEventListener('submit',submitTopup);$('productForm').addEventListener('submit',addProduct);$('editProductForm').addEventListener('submit',saveProductEdit);
 $('closeEditProduct').addEventListener('click',()=>$('editProductModal').classList.add('hidden'));
 $('cancelEditProduct').addEventListener('click',()=>$('editProductModal').classList.add('hidden'));
-$('manualReviewForm').addEventListener('submit',submitManualReview);$('refreshAdminTopups').addEventListener('click',()=>loadAdmin());
+$('manualReviewForm').addEventListener('submit',submitManualReview);
 $('closeManualReview').addEventListener('click',()=>$('manualReviewModal').classList.add('hidden'));
 $('cancelManualReview').addEventListener('click',()=>$('manualReviewModal').classList.add('hidden'));
-document.addEventListener('click',e=>{const n=e.target.closest('[data-page]');if(n)page(n.dataset.page);const go=e.target.closest('[data-go]');if(go)page(go.dataset.go);const buy=e.target.closest('[data-buy]');if(buy)buyProduct(buy.dataset.buy,buy);const retry=e.target.closest('[data-retry-verify]');if(retry)retrySlipVerification(retry.dataset.retryVerify);const reloadProducts=e.target.closest('[data-reload-products]');if(reloadProducts)loadProducts();const refreshAdmin=e.target.closest('#refreshAdminTopups');if(refreshAdmin)loadAdmin();const manual=e.target.closest('[data-manual-review]');if(manual)openManualReview(manual.dataset.manualReview,manual.dataset.slipUrl,manual.dataset.amount);const rev=e.target.closest('[data-review]');if(rev)reviewTopup(rev.dataset.review,rev.dataset.approve==='true');const edit=e.target.closest('[data-edit]');if(edit)editProduct(edit.dataset.edit);const del=e.target.closest('[data-delete]');if(del)deleteProduct(del.dataset.delete);const copy=e.target.closest('[data-copy]');if(copy){const value=copy.dataset.copy;if(navigator.clipboard?.writeText){navigator.clipboard.writeText(value).then(()=>toast('คัดลอกแล้ว')).catch(()=>toast('คัดลอกไม่สำเร็จ กรุณาคัดลอกด้วยตนเอง: '+value))}else toast('เบราว์เซอร์ไม่รองรับการคัดลอกอัตโนมัติ: '+value)}});
+document.addEventListener('click',e=>{const n=e.target.closest('[data-page]');if(n)page(n.dataset.page);const go=e.target.closest('[data-go]');if(go)page(go.dataset.go);const buy=e.target.closest('[data-buy]');if(buy)buyProduct(buy.dataset.buy,buy);const retry=e.target.closest('[data-retry-verify]');if(retry)retrySlipVerification(retry.dataset.retryVerify);const reloadProducts=e.target.closest('[data-reload-products]');if(reloadProducts)loadProducts();const refreshAdmin=e.target.closest('#refreshAdminTopups');if(refreshAdmin)loadAdmin();const manual=e.target.closest('[data-manual-review]');if(manual)openManualReview(manual.dataset.manualReview,manual.dataset.slipUrl,manual.dataset.amount);const rev=e.target.closest('[data-review]');if(rev){const approve=rev.dataset.approve==='true';if(!approve&&confirm('ยืนยันปฏิเสธรายการเติมเงินนี้?'))reviewTopup(rev.dataset.review,false,'ปฏิเสธโดยแอดมิน')}const edit=e.target.closest('[data-edit]');if(edit)editProduct(edit.dataset.edit);const del=e.target.closest('[data-delete]');if(del)deleteProduct(del.dataset.delete);const copy=e.target.closest('[data-copy]');if(copy){const value=copy.dataset.copy;if(navigator.clipboard?.writeText){navigator.clipboard.writeText(value).then(()=>toast('คัดลอกแล้ว')).catch(()=>toast('คัดลอกไม่สำเร็จ กรุณาคัดลอกด้วยตนเอง: '+value))}else toast('เบราว์เซอร์ไม่รองรับการคัดลอกอัตโนมัติ: '+value)}});
 supabase.auth.onAuthStateChange(()=>setTimeout(refreshSession,0));
 await refreshSession();await loadProducts();
