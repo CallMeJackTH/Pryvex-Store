@@ -9,7 +9,7 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const token = (req.headers.authorization || "").replace(/^Bearer\\s+/i, "");
+  const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
   if (!token) return res.status(401).json({ error: "กรุณาเข้าสู่ระบบก่อน" });
   if (!process.env.IMGBB_API_KEY) {
     return res.status(503).json({ error: "ยังไม่ได้ตั้งค่า IMGBB_API_KEY ใน Vercel" });
@@ -37,7 +37,6 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: "กรุณาส่งไฟล์รูปภาพ" });
     }
 
-    // Vercel parses multipart bodies only when configured; raw request streaming is used here.
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
     const body = Buffer.concat(chunks);
@@ -46,23 +45,30 @@ module.exports = async function handler(req, res) {
     const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
     if (!boundaryMatch) return res.status(400).json({ error: "รูปแบบไฟล์ไม่ถูกต้อง" });
     const boundary = boundaryMatch[1] || boundaryMatch[2];
-    const parts = body.toString("latin1").split("--" + boundary);
-    let imagePart = null;
-    for (const part of parts) {
-      if (/name="image"/i.test(part)) {
-        const splitAt = part.indexOf("\\r\\n\\r\\n");
-        if (splitAt >= 0) {
-          let raw = part.slice(splitAt + 4);
-          raw = raw.replace(/\\r\\n--?$/, "").replace(/\\r\\n$/, "");
-          imagePart = Buffer.from(raw, "latin1");
-          break;
-        }
-      }
-    }
-    if (!imagePart || imagePart.length === 0) return res.status(400).json({ error: "ไม่พบไฟล์รูปภาพ" });
-    if (imagePart.length > 5 * 1024 * 1024) return res.status(413).json({ error: "รูปสินค้าต้องไม่เกิน 5 MB" });
+    const headerMarker = Buffer.from('name="image"');
+    const headerStart = body.indexOf(headerMarker);
+    if (headerStart < 0) return res.status(400).json({ error: "ไม่พบไฟล์รูปภาพ" });
 
-    const imageBlob = new Blob([imagePart], { type: "application/octet-stream" });
+    const dataStartMarker = Buffer.from("\r\n\r\n");
+    const headerEnd = body.indexOf(dataStartMarker, headerStart);
+    if (headerEnd < 0) return res.status(400).json({ error: "ข้อมูลไฟล์ไม่ถูกต้อง" });
+    const dataStart = headerEnd + dataStartMarker.length;
+    const dataEnd = body.indexOf(Buffer.from("\r\n--" + boundary), dataStart);
+    if (dataEnd < 0) return res.status(400).json({ error: "อ่านไฟล์รูปภาพไม่สำเร็จ" });
+
+    const image = body.subarray(dataStart, dataEnd);
+    if (!image.length || image.length > 5 * 1024 * 1024) {
+      return res.status(413).json({ error: "รูปสินค้าต้องไม่เกิน 5 MB" });
+    }
+
+    const isJpeg = image[0] === 0xff && image[1] === 0xd8 && image[2] === 0xff;
+    const isPng = image.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
+    const isWebp = image.subarray(0, 4).toString() === "RIFF" && image.subarray(8, 12).toString() === "WEBP";
+    if (!isJpeg && !isPng && !isWebp) {
+      return res.status(415).json({ error: "ไฟล์ต้องเป็น JPG, PNG หรือ WEBP เท่านั้น" });
+    }
+
+    const imageBlob = new Blob([image], { type: isJpeg ? "image/jpeg" : isPng ? "image/png" : "image/webp" });
     const uploadForm = new FormData();
     uploadForm.append("image", imageBlob, "product-image");
     const imgbbResponse = await fetch(
@@ -73,9 +79,12 @@ module.exports = async function handler(req, res) {
     if (!imgbbResponse.ok || !result.success || !result.data?.url) {
       return res.status(502).json({ error: "ImgBB อัปโหลดไม่สำเร็จ" });
     }
-    return res.status(200).json({ url: result.data.url, delete_url: result.data.delete_url || null });
+
+    return res.status(200).json({ url: result.data.url });
   } catch (error) {
     console.error("imgbb-upload:", error);
     return res.status(500).json({ error: "เกิดข้อผิดพลาดในระบบอัปโหลด" });
   }
 };
+
+module.exports.config = { api: { bodyParser: false } };
