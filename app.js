@@ -39,6 +39,7 @@ async function notifyDiscord(event, topupId){
    if(event==='topup_submitted')toast('บันทึกคำขอเติมเงินแล้ว แต่แจ้ง Discord ไม่สำเร็จ: '+reason);
    return false;
   }
+  if(event==='topup_submitted')toast('ส่งแจ้งเตือนรายการเติมเงินเข้า Discord แล้ว');
   return true;
  }catch(error){
   console.warn('Discord notification failed:',error);
