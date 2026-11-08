@@ -8,7 +8,12 @@ let isAdmin = false;
 const $ = (id) => document.getElementById(id);
 const money = (n) => new Intl.NumberFormat('th-TH',{style:'currency',currency:'THB'}).format(Number(n||0));
 const esc = (v='') => String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function toast(message){const el=$('toast');el.textContent=message;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2600)}
+function toast(message){
+ if(message&&typeof message.then==='function'){message.then(value=>toast(value)).catch(error=>toast(error?.message||'เกิดข้อผิดพลาด'));return}
+ const el=$('toast');
+ const readable=Array.isArray(message)?message.join(' '):(typeof message==='string'?message:(message?.message||'เกิดข้อผิดพลาด'));
+ el.textContent=readable;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),3500);
+}
 function page(name){document.querySelectorAll('.page').forEach(p=>p.classList.add('hidden'));$(name+'Page').classList.remove('hidden');document.querySelectorAll('.nav-link').forEach(b=>b.classList.toggle('active',b.dataset.page===name));if(name==='wallet')loadWallet();if(name==='orders')loadOrders();if(name==='admin')loadAdmin()}
 function signedIn(){return !!currentUser}
 function requireLogin(){if(!signedIn()){toast('กรุณาเข้าสู่ระบบ Discord ก่อน');return false}return true}
@@ -86,6 +91,7 @@ async function loadAdmin(){
  $('adminTopups').innerHTML=rows?.length?await Promise.all(rows.map(async r=>{
   const {data}=await supabase.storage.from('store-slips').createSignedUrl(r.slip_path,300);
   const verifyLabel=({verified:'EasySlip: ผ่าน',failed:'EasySlip: ไม่ผ่าน',error:'EasySlip: ตรวจไม่ได้',not_checked:'ยังไม่ตรวจ'})[r.verification_status]||'ยังไม่ตรวจ';
+  const retryButton=['not_checked','error',null,undefined].includes(r.verification_status)?'<button class="btn-mini" data-retry-verify="'+r.id+'">ตรวจ EasySlip ซ้ำ</button>':'';
   const verifyClass=r.verification_status==='verified'?'approved':r.verification_status==='failed'?'rejected':'';
   const verifyInfo=r.verification_status==='verified'?'ยอดในสลิป '+money(r.verification_amount)+(r.verification_reference?' · Ref '+esc(r.verification_reference):''):(r.verification_error?esc(r.verification_error):'รอผลตรวจสอบ');
   const manualButton=data?.signedUrl?'<button class="btn-mini" data-manual-review="'+r.id+'" data-slip-url="'+esc(data.signedUrl)+'" data-amount="'+Number(r.amount)+'">ตรวจสอบเอง</button>':'';
@@ -100,6 +106,15 @@ function openManualReview(id,slipUrl,amount){
  form.reset();form.elements.topup_id.value=id;form.elements.amount.value=amount;
  $('manualSlipImage').src=slipUrl;
  $('manualReviewModal').classList.remove('hidden');
+}
+async function retrySlipVerification(id){
+ if(!isAdmin)return;
+ const {data,error}=await supabase.functions.invoke('verify-store-slip',{body:{topup_id:id}});
+ if(error){toast('ตรวจ EasySlip ซ้ำไม่สำเร็จ: '+(error.message||'ตรวจสอบการตั้งค่า Function'));return}
+ if(data?.verification_status==='verified')toast('EasySlip ตรวจผ่านแล้ว รอ Admin อนุมัติ');
+ else if(data?.verification_status==='failed')toast('EasySlip พบข้อมูลไม่ตรง กรุณาตรวจสอบสลิป');
+ else toast(data?.error||data?.message||'EasySlip ยังตรวจสอบไม่ได้');
+ await loadAdmin();
 }
 async function submitManualReview(e){
  e.preventDefault();if(!isAdmin)return;
@@ -180,6 +195,6 @@ $('cancelEditProduct').addEventListener('click',()=>$('editProductModal').classL
 $('manualReviewForm').addEventListener('submit',submitManualReview);
 $('closeManualReview').addEventListener('click',()=>$('manualReviewModal').classList.add('hidden'));
 $('cancelManualReview').addEventListener('click',()=>$('manualReviewModal').classList.add('hidden'));
-document.addEventListener('click',e=>{const n=e.target.closest('[data-page]');if(n)page(n.dataset.page);const go=e.target.closest('[data-go]');if(go)page(go.dataset.go);const buy=e.target.closest('[data-buy]');if(buy)buyProduct(buy.dataset.buy);const manual=e.target.closest('[data-manual-review]');if(manual)openManualReview(manual.dataset.manualReview,manual.dataset.slipUrl,manual.dataset.amount);const rev=e.target.closest('[data-review]');if(rev)reviewTopup(rev.dataset.review,rev.dataset.approve==='true');const edit=e.target.closest('[data-edit]');if(edit)editProduct(edit.dataset.edit);const del=e.target.closest('[data-delete]');if(del)deleteProduct(del.dataset.delete);const copy=e.target.closest('[data-copy]');if(copy){navigator.clipboard.writeText(copy.dataset.copy);toast('คัดลอกแล้ว')}});
+document.addEventListener('click',e=>{const n=e.target.closest('[data-page]');if(n)page(n.dataset.page);const go=e.target.closest('[data-go]');if(go)page(go.dataset.go);const buy=e.target.closest('[data-buy]');if(buy)buyProduct(buy.dataset.buy);const retry=e.target.closest('[data-retry-verify]');if(retry)retrySlipVerification(retry.dataset.retryVerify);const manual=e.target.closest('[data-manual-review]');if(manual)openManualReview(manual.dataset.manualReview,manual.dataset.slipUrl,manual.dataset.amount);const rev=e.target.closest('[data-review]');if(rev)reviewTopup(rev.dataset.review,rev.dataset.approve==='true');const edit=e.target.closest('[data-edit]');if(edit)editProduct(edit.dataset.edit);const del=e.target.closest('[data-delete]');if(del)deleteProduct(del.dataset.delete);const copy=e.target.closest('[data-copy]');if(copy){navigator.clipboard.writeText(copy.dataset.copy);toast('คัดลอกแล้ว')}});
 supabase.auth.onAuthStateChange(()=>setTimeout(refreshSession,0));
 await refreshSession();await loadProducts();
