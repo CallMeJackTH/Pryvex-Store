@@ -64,10 +64,10 @@ async function loadWallet(){
  const balanceEl=$('walletBalance'), miniEl=$('walletMini'), historyEl=$('topupHistory');
  if(historyEl)historyEl.innerHTML='<span class="muted">กำลังโหลดข้อมูล...</span>';
  try{
-  const [walletResult,topupResult]=await Promise.all([
+  const [walletResult,topupResult]=await withTimeout(Promise.all([
    supabase.from('store_wallets').select('balance').eq('user_id',currentUser.id).maybeSingle(),
    supabase.from('store_topups').select('id,amount,payment_method,status,created_at,review_note').eq('user_id',currentUser.id).order('created_at',{ascending:false}).limit(10)
-  ]);
+  ]),18000,'โหลดข้อมูลกระเป๋าเงินใช้เวลานานเกินไป');
   if(walletResult.error)throw walletResult.error;
   if(topupResult.error)throw topupResult.error;
   const balance=Number(walletResult.data?.balance||0);
@@ -135,7 +135,7 @@ async function submitTopup(e){
   void runAutoVerification(topupId);
  }catch(error){
   console.error('submit topup:',error);
-  if(uploaded){
+  if(uploaded&&safeToDeleteUploaded){
    try{await supabase.storage.from('store-slips').remove([path]);}catch(cleanupError){console.warn('slip cleanup:',cleanupError)}
   }
   toast(readableError(error,'ส่งสลิปไม่สำเร็จ กรุณาลองใหม่'));
@@ -192,7 +192,7 @@ async function loadAdmin(){
   if(loadId===adminLoadSequence)topupsEl.innerHTML='<span class="muted">โหลดรายการเติมเงินไม่สำเร็จ: '+esc(readableError(error))+'</span>';
  }
  try{
-  const {data:products,error}=await supabase.from('store_products').select('id,name,price,stock,is_active').order('created_at',{ascending:false});
+  const {data:products,error}=await withTimeout(supabase.from('store_products').select('id,name,price,stock,is_active').order('created_at',{ascending:false}),18000,'โหลดรายการสินค้าแอดมินใช้เวลานานเกินไป');
   if(error)throw error;
   $('adminProducts').innerHTML=products?.length?products.map(p=>'<div class="history-row product-admin-row"><div><b>'+esc(p.name)+'</b><div class="muted">'+money(p.price)+' · '+(p.stock===null?'สต็อกไม่จำกัด':'คงเหลือ '+p.stock+' ชิ้น')+' · '+(p.is_active?'เปิดขาย':'ปิดขาย')+'</div></div><div class="inline-actions"><button class="btn-mini" data-edit="'+p.id+'">แก้ไข / เพิ่มสต็อก</button><button class="btn-mini btn-danger" data-delete="'+p.id+'">ลบ</button></div></div>').join(''):'<span class="muted">ยังไม่มีสินค้า</span>';
  }catch(error){
