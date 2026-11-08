@@ -82,6 +82,7 @@ module.exports = async function handler(req, res) {
           title: titles[event],
           description: descriptions[event],
           color: colors[event],
+          image: { url: "https://i.ibb.co/d4FQxsCs/72d136879c86.jpg" },
           fields: [
             { name: "สมาชิก", value: displayName, inline: true },
             { name: "ยอดเงิน", value: Number(topup.amount).toLocaleString("th-TH") + " บาท", inline: true },
