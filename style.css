@@ -40,3 +40,5 @@ button:disabled{opacity:.58;cursor:wait;filter:saturate(.65);transform:none!impo
 
 /* Keep each delivered license key on its own visible line. */
 .delivery-payload{white-space:pre-wrap;overflow-wrap:anywhere;margin-top:5px;color:#c9c2ff;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;line-height:1.7}
+
+.redeem-modal{width:min(460px,100%);margin:auto;border-color:#62558e;box-shadow:0 25px 90px #0009}.redeem-modal>p{margin:0 0 17px;font-size:13px}.redeem-link-box{display:flex;flex-direction:column;gap:9px;padding:15px;margin:0 0 16px;border:1px solid #393653;border-radius:12px;background:#0b101c}.redeem-link-box span{font-size:13px;color:#b9bfd0}.redeem-link-box a{color:#bdb4ff;font-size:14px;font-weight:600;overflow-wrap:anywhere;text-decoration:none}.redeem-link-box a:hover{text-decoration:underline}.redeem-modal .full{width:100%}
