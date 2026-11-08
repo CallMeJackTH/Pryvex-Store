@@ -46,7 +46,9 @@ async function buyProduct(id){
  toast('ซื้อสินค้าสำเร็จ');await loadProducts();await loadWallet();await loadOrders();
 }
 async function submitTopup(e){
- e.preventDefault();if(!requireLogin())return;
+ e.preventDefault();
+ const formElement=e.currentTarget;
+ if(!requireLogin())return;
  const f=new FormData(e.currentTarget),amount=Number(f.get('amount')),file=f.get('slip'),method=f.get('method');
  if(!file||!file.size||file.size>4*1024*1024){toast('กรุณาแนบรูปสลิปไม่เกิน 4 MB (EasySlip)');return}
  if(!['image/jpeg','image/png','image/webp'].includes(file.type)){toast('รองรับไฟล์ JPG, PNG และ WEBP');return}
@@ -55,7 +57,7 @@ async function submitTopup(e){
  if(uploadError){toast('อัปโหลดสลิปไม่สำเร็จ: '+uploadError.message);return}
  const {data:topup,error}=await supabase.from('store_topups').insert({user_id:currentUser.id,amount,payment_method:method,slip_path:path,status:'pending'}).select('id').single();
  if(error){toast('บันทึกรายการไม่สำเร็จ: '+error.message);return}
- e.currentTarget.reset();
+ formElement.reset();
  const {data:verification,error:verificationError}=await supabase.functions.invoke('verify-store-slip',{body:{topup_id:topup.id}});
  if(verificationError){toast('ส่งสลิปแล้ว แต่ระบบตรวจสอบอัตโนมัติขัดข้อง รายการยังรอ Admin ตรวจสอบ');}
  else if(verification?.verification_status==='verified'){toast('ตรวจสอบสลิปผ่านแล้ว รอ Admin อนุมัติ');}
