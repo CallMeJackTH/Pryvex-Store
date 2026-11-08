@@ -60,7 +60,7 @@ async function submitTopup(e){
 async function loadAdmin(){
  if(!isAdmin){toast('ไม่มีสิทธิ์เข้าถึง');page('shop');return}
  const {data:rows}=await supabase.from('store_topups').select('id,user_id,amount,payment_method,slip_path,created_at').eq('status','pending').order('created_at',{ascending:true});
- $('adminTopups').innerHTML=rows?.length?await Promise.all(rows.map(async r=>{const {data}=await supabase.storage.from('store-slips').createSignedUrl(r.slip_path,300);return '<div class="history-row"><div><b>'+money(r.amount)+' · '+esc(r.payment_method)+'</b><div class="muted">'+esc(r.user_id)+' · '+new Date(r.created_at).toLocaleString('th-TH')+'</div>'+(data?.signedUrl?'<a target="_blank" rel="noopener" href="'+esc(data.signedUrl)+'">เปิดดูสลิป</a>':'')+'</div><div class="inline-actions"><button class="btn-mini" data-review="'+r.id+'" data-approve="true">อนุมัติ</button><button class="btn-mini btn-danger" data-review="'+r.id+'" data-approve="false">ปฏิเสธ</button></div></div>'}).join('')):'<span class="muted">ไม่มีรายการรอตรวจสอบ</span>';
+ $('adminTopups').innerHTML=rows?.length?await Promise.all(rows.map(async r=>{const {data}=await supabase.storage.from('store-slips').createSignedUrl(r.slip_path,300);return '<div class="history-row"><div><b>'+money(r.amount)+' · '+esc(r.payment_method)+'</b><div class="muted">'+esc(r.user_id)+' · '+new Date(r.created_at).toLocaleString('th-TH')+'</div>'+(data?.signedUrl?'<a class="slip-preview-link" target="_blank" rel="noopener" href="'+esc(data.signedUrl)+'"><img class="slip-thumb" src="'+esc(data.signedUrl)+'" alt="สลิปแนบ">เปิดดูสลิปขนาดเต็ม</a>':'')+'</div><div class="inline-actions"><button class="btn-mini" data-review="'+r.id+'" data-approve="true">อนุมัติ</button><button class="btn-mini btn-danger" data-review="'+r.id+'" data-approve="false">ปฏิเสธ</button></div></div>'}).join('')):'<span class="muted">ไม่มีรายการรอตรวจสอบ</span>';
  const {data:products}=await supabase.from('store_products').select('id,name,price,is_active').order('created_at',{ascending:false});
  $('adminProducts').innerHTML=products?.length?products.map(p=>'<div class="history-row"><div><b>'+esc(p.name)+'</b><div class="muted">'+money(p.price)+' · '+(p.is_active?'เปิดขาย':'ปิดขาย')+'</div></div><button class="btn-mini btn-danger" data-delete="'+p.id+'">ลบสินค้า</button></div>').join(''):'<span class="muted">ยังไม่มีสินค้า</span>';
 }
@@ -73,7 +73,20 @@ async function reviewTopup(id,approve){
 async function addProduct(e){
  e.preventDefault();if(!isAdmin)return;
  const f=new FormData(e.currentTarget),stock=f.get('stock');
- const row={name:f.get('name').trim(),price:Number(f.get('price')),category:f.get('category')||'ทั่วไป',description:f.get('description')||'',image_url:f.get('image_url')||null,stock:stock===''?null:Number(stock),delivery_type:f.get('delivery_type'),delivery_payload:f.get('delivery_payload')||null,is_active:true};
+ let imageUrl=f.get('image_url')||null;
+ const imageFile=f.get('image_file');
+ if(imageFile && imageFile.size){
+  if(imageFile.size>5*1024*1024){toast('รูปสินค้าต้องไม่เกิน 5 MB');return}
+  if(!['image/jpeg','image/png','image/webp'].includes(imageFile.type)){toast('รองรับรูป JPG, PNG และ WEBP');return}
+  const {data:{session}}=await supabase.auth.getSession();
+  const uploadData=new FormData();uploadData.append('image',imageFile);
+  let uploadResponse;
+  try{uploadResponse=await fetch('/api/imgbb-upload',{method:'POST',headers:{Authorization:'Bearer '+session.access_token},body:uploadData})}catch{toast('เชื่อมต่อระบบอัปโหลดไม่สำเร็จ');return}
+  const uploadResult=await uploadResponse.json().catch(()=>({}));
+  if(!uploadResponse.ok||!uploadResult.url){toast(uploadResult.error||'อัปโหลดรูปไม่สำเร็จ');return}
+  imageUrl=uploadResult.url;
+ }
+ const row={name:f.get('name').trim(),price:Number(f.get('price')),category:f.get('category')||'ทั่วไป',description:f.get('description')||'',image_url:imageUrl,stock:stock===''?null:Number(stock),delivery_type:f.get('delivery_type'),delivery_payload:f.get('delivery_payload')||null,is_active:true};
  const {error}=await supabase.from('store_products').insert(row);
  if(error){toast('เพิ่มสินค้าไม่สำเร็จ: '+error.message);return}
  e.currentTarget.reset();toast('เพิ่มสินค้าแล้ว');await loadProducts();await loadAdmin();
