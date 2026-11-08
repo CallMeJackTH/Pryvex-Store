@@ -181,7 +181,7 @@ async function loadAdmin(){
    const verifyClass=r.verification_status==='verified'?'approved':r.verification_status==='failed'?'rejected':'';
    const verifyInfo=r.verification_status==='verified'?'ยอดในสลิป '+money(r.verification_amount)+(r.verification_reference?' · Ref '+esc(r.verification_reference):''):(r.verification_error?esc(r.verification_error):'รอผลตรวจสอบ');
    const retryButton=['not_checked','error',null,undefined].includes(r.verification_status)?'<button class="btn-mini" data-retry-verify="'+r.id+'">ตรวจ EasySlip ซ้ำ</button>':'';
-   const manualButton=signedUrl?'<button class="btn-mini" data-manual-review="'+r.id+'" data-slip-url="'+esc(signedUrl)+'" data-amount="'+Number(r.amount)+'">ตรวจสอบเอง</button>':'';
+   const manualButton=r.slip_path?'<button class="btn-mini" type="button" data-manual-review="'+r.id+'" data-slip-path="'+esc(r.slip_path)+'" data-amount="'+Number(r.amount)+'">ตรวจสอบเอง</button>':'';
    const preview=signedUrl?'<a class="slip-preview-link" target="_blank" rel="noopener" href="'+esc(signedUrl)+'"><img class="slip-thumb" src="'+esc(signedUrl)+'" alt="สลิปแนบ">เปิดดูสลิปขนาดเต็ม</a>':'<div class="muted slip-error">รูปสลิป: '+esc(slipError)+'</div>';
    return '<div class="history-row admin-topup-row"><div class="admin-topup-info"><b>'+money(r.amount)+' · '+esc(r.payment_method)+'</b><div class="muted">'+esc(r.user_id)+' · '+new Date(r.created_at).toLocaleString('th-TH')+'</div><div class="status '+verifyClass+'">'+verifyLabel+'</div><div class="muted">'+verifyInfo+'</div>'+(r.verification_duplicate?'<div class="status rejected">EasySlip แจ้งว่าสลิปซ้ำ</div>':'')+(r.verification_receiver_match===false?'<div class="status rejected">บัญชีผู้รับไม่ตรง</div>':'')+preview+'</div><div class="inline-actions">'+retryButton+manualButton+'<button class="btn-mini btn-danger" data-review="'+r.id+'" data-approve="false">ปฏิเสธ</button></div></div>';
   }));
@@ -222,20 +222,28 @@ async function retrySlipVerification(id){
  }catch(error){toast('ตรวจ EasySlip ไม่สำเร็จ: '+readableError(error))}
  finally{await loadAdmin()}
 }
-function openManualReview(id,slipUrl,amount){
+async function openManualReview(id,slipPath,amount){
  if(!isAdmin){toast('ไม่มีสิทธิ์เข้าถึง');return}
- if(!id){toast('ไม่พบรหัสรายการเติมเงิน');return}
- if(!slipUrl){toast('ไม่พบลิงก์สลิป กรุณากดรีเฟรชรายการ');return}
+ if(!id||!slipPath){toast('ไม่พบไฟล์สลิปของรายการนี้');return}
  const form=$('manualReviewForm'),modal=$('manualReviewModal'),image=$('manualSlipImage');
  if(!form||!modal||!image){toast('หน้าแสดงผลตรวจสอบไม่สมบูรณ์ กรุณารีเฟรชเว็บ');return}
- form.reset();
- form.elements.namedItem('topup_id').value=id;
- form.elements.namedItem('amount').value=money(amount);
- image.onerror=()=>{image.removeAttribute('src');toast('เปิดรูปสลิปไม่ได้ กรุณาใช้ปุ่มเปิดดูสลิปขนาดเต็ม')};
- image.src=slipUrl;
- modal.classList.remove('hidden');
- modal.setAttribute('aria-hidden','false');
- modal.scrollTop=0;
+ const button=document.querySelector('[data-manual-review="'+CSS.escape(id)+'"]');
+ const oldText=button?.textContent||'ตรวจสอบเอง';
+ setBusy(button,true,'กำลังเปิดสลิป...',oldText);
+ try{
+  const {data,error}=await withTimeout(supabase.storage.from('store-slips').createSignedUrl(slipPath,1800),15000,'เปิดไฟล์สลิปใช้เวลานานเกินไป');
+  if(error)throw error;
+  if(!data?.signedUrl)throw new Error('สร้างลิงก์สลิปไม่สำเร็จ ตรวจสอบสิทธิ์ Storage');
+  form.reset();
+  form.elements.namedItem('topup_id').value=id;
+  form.elements.namedItem('amount').value=money(amount);
+  image.onerror=()=>{image.removeAttribute('src');toast('เปิดรูปสลิปไม่ได้ กรุณากดรีเฟรชรายการ')};
+  image.src=data.signedUrl;
+  modal.classList.remove('hidden');
+  modal.setAttribute('aria-hidden','false');
+  modal.scrollTop=0;
+ }catch(error){console.error('openManualReview:',error);toast('เปิดตรวจสอบสลิปไม่สำเร็จ: '+readableError(error))}
+ finally{if(button?.isConnected)setBusy(button,false,'',oldText)}
 }
 async function submitManualReview(e){
  e.preventDefault();if(!isAdmin)return;
@@ -359,7 +367,7 @@ document.addEventListener('click',e=>{
   const retry=closest('[data-retry-verify]');if(retry){retrySlipVerification(retry.dataset.retryVerify);return}
   const reloadProducts=closest('[data-reload-products]');if(reloadProducts){loadProducts();return}
   const refreshAdmin=closest('#refreshAdminTopups');if(refreshAdmin){loadAdmin();return}
-  const manual=closest('[data-manual-review]');if(manual){openManualReview(manual.dataset.manualReview,manual.dataset.slipUrl,manual.dataset.amount);return}
+  const manual=closest('[data-manual-review]');if(manual){openManualReview(manual.dataset.manualReview,manual.dataset.slipPath,manual.dataset.amount);return}
   const rev=closest('[data-review]');if(rev){const approve=rev.dataset.approve==='true';if(!approve&&confirm('ยืนยันปฏิเสธรายการเติมเงินนี้?'))reviewTopup(rev.dataset.review,false,'ปฏิเสธโดยแอดมิน');return}
   const edit=closest('[data-edit]');if(edit){editProduct(edit.dataset.edit);return}
   const del=closest('[data-delete]');if(del){deleteProduct(del.dataset.delete);return}
