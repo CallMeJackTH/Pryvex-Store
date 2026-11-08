@@ -39,7 +39,7 @@ module.exports = async function handler(req, res) {
       if (!Array.isArray(admins) || admins.length === 0) return res.status(403).json({ error: "เฉพาะแอดมินเท่านั้น" });
     }
 
-    const query = "/rest/v1/store_topups?select=id,user_id,amount,payment_method,status,created_at,slip_path&id=eq." + encodeURIComponent(topupId);
+    const query = "/rest/v1/store_topups?select=id,user_id,amount,payment_method,status,created_at&id=eq." + encodeURIComponent(topupId);
     const topupResponse = await fetch(SUPABASE_URL + query, {
       headers: { apikey: SUPABASE_ANON_KEY, Authorization: "Bearer " + token }
     });
@@ -49,40 +49,6 @@ module.exports = async function handler(req, res) {
     if (!topup) return res.status(404).json({ error: "ไม่พบรายการเติมเงิน" });
     if (event === "topup_submitted" && topup.user_id !== user.id) {
       return res.status(403).json({ error: "ไม่มีสิทธิ์แจ้งเตือนรายการนี้" });
-    }
-
-    // Create a short-lived signed URL for the private slip.
-    // The bucket remains private; only recipients of this Discord message can use the link.
-    let slipUrl = null;
-    if (topup.slip_path) {
-      try {
-        const encodedPath = String(topup.slip_path).split("/").map(encodeURIComponent).join("/");
-        const signedResponse = await fetch(
-          SUPABASE_URL + "/storage/v1/object/sign/store-slips/" + encodedPath,
-          {
-            method: "POST",
-            headers: {
-              apikey: SUPABASE_ANON_KEY,
-              Authorization: "Bearer " + token,
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ expiresIn: 1800 })
-          }
-        );
-        if (signedResponse.ok) {
-          const signedData = await signedResponse.json();
-          const signedPath = signedData.signedURL || signedData.signedUrl;
-          if (signedPath) {
-            slipUrl = signedPath.startsWith("http")
-              ? signedPath
-              : SUPABASE_URL + (signedPath.startsWith("/") ? signedPath : "/" + signedPath);
-          }
-        } else {
-          console.warn("Could not create signed slip URL:", signedResponse.status, (await signedResponse.text()).slice(0, 300));
-        }
-      } catch (signedError) {
-        console.warn("Could not create signed slip URL:", signedError);
-      }
     }
 
     const displayName = String(
@@ -121,7 +87,6 @@ module.exports = async function handler(req, res) {
             { name: "ยอดเงิน", value: Number(topup.amount).toLocaleString("th-TH") + " บาท", inline: true },
             { name: "ช่องทาง", value: String(topup.payment_method || "-").slice(0, 100), inline: true },
             { name: "รหัสรายการ", value: "`" + topup.id + "`" },
-            ...(slipUrl ? [{ name: "รูปสลิป", value: "[กดที่นี่เพื่อเปิดดูรูปสลิป](" + slipUrl + ")" }] : [])
           ],
           timestamp: new Date().toISOString(),
           footer: { text: "Pryvex Store Notifications" }
