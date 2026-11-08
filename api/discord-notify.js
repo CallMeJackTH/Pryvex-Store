@@ -12,7 +12,7 @@ module.exports = async function handler(req, res) {
     return res.status(503).json({ error: "ยังไม่ได้ตั้งค่า DISCORD_BOT_TOKEN ใน Vercel" });
   }
 
-  const token = (req.headers.authorization || "").replace(/^Bearer\\s+/i, "");
+  const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
   if (!token) return res.status(401).json({ error: "กรุณาเข้าสู่ระบบ" });
 
   try {
