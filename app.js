@@ -48,7 +48,7 @@ async function buyProduct(id){
 async function submitTopup(e){
  e.preventDefault();if(!requireLogin())return;
  const f=new FormData(e.currentTarget),amount=Number(f.get('amount')),file=f.get('slip'),method=f.get('method');
- if(!file||!file.size||file.size>5*1024*1024){toast('กรุณาแนบรูปสลิปไม่เกิน 5 MB');return}
+ if(!file||!file.size||file.size>4*1024*1024){toast('กรุณาแนบรูปสลิปไม่เกิน 4 MB (EasySlip)');return}
  if(!['image/jpeg','image/png','image/webp'].includes(file.type)){toast('รองรับไฟล์ JPG, PNG และ WEBP');return}
  const ext=file.name.split('.').pop().toLowerCase(),path=currentUser.id+'/'+crypto.randomUUID()+'.'+ext;
  const {error:uploadError}=await supabase.storage.from('store-slips').upload(path,file,{contentType:file.type,upsert:false});
