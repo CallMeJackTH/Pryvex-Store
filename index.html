@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#090b12">
+  <title>Pryvex Store</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="ambient"></div>
+  <header class="topbar">
+    <a class="brand" href="#"><span class="brand-mark">P</span><span>PRYVEX<span class="muted"> STORE</span></span></a>
+    <nav><button class="nav-link active" data-page="shop">หน้าร้าน</button><button class="nav-link" data-page="wallet">กระเป๋าเงิน</button><button class="nav-link" data-page="orders">ประวัติคำสั่งซื้อ</button><button class="nav-link hidden" id="adminNav" data-page="admin">จัดการร้าน</button></nav>
+    <div class="account"><span id="walletMini" class="wallet-mini hidden">฿0.00</span><button id="loginBtn" class="btn btn-primary">เข้าสู่ระบบ Discord</button><button id="logoutBtn" class="btn btn-ghost hidden">ออกจากระบบ</button></div>
+  </header>
+  <main>
+    <section class="hero">
+      <div class="eyebrow"><span class="dot"></span> DIGITAL GOODS · FAST DELIVERY</div>
+      <h1>ยินดีต้อนรับสู่ <span>Pryvex Store</span></h1>
+      <p>ร้านค้าดิจิทัล เติมเงินง่าย ซื้อสินค้าได้ในไม่กี่คลิก</p>
+      <div class="hero-actions"><button class="btn btn-primary" data-go="shop">เลือกซื้อสินค้า <span>↗</span></button><button class="btn btn-outline" data-go="wallet">เติมเงินเข้ากระเป๋า</button></div>
+      <div class="hero-glow"></div>
+    </section>
+    <section id="shopPage" class="page">
+      <div class="section-head"><div><div class="eyebrow">OUR COLLECTION</div><h2>สินค้าแนะนำ</h2></div><span id="productCount" class="muted small">กำลังโหลดสินค้า...</span></div>
+      <div id="products" class="product-grid"><div class="empty">กำลังโหลดสินค้า...</div></div>
+    </section>
+    <section id="walletPage" class="page hidden">
+      <div class="section-head"><div><div class="eyebrow">YOUR BALANCE</div><h2>กระเป๋าเงิน</h2></div></div>
+      <div class="wallet-layout">
+        <div class="panel balance-panel"><span class="muted">ยอดเงินคงเหลือ</span><strong id="walletBalance">฿0.00</strong><span class="muted small">ยอดเงินจะแสดงหลังเข้าสู่ระบบ</span></div>
+        <div class="panel"><h3>เติมเงินเข้ากระเป๋า</h3><p class="muted small">โอนเงินตามช่องทางด้านล่าง แล้วแนบสลิปเพื่อรอแอดมินตรวจสอบ</p>
+          <div class="payment-grid">
+            <div class="payment-card"><b>TrueMoney Wallet</b><strong>0801569915</strong><span class="muted small">ชื่อบัญชี: ภูวเดช ทองศรี</span><button class="copy-btn" data-copy="0801569915">คัดลอกเบอร์</button></div>
+            <div class="payment-card"><b>PromptPay QR</b><img class="qr" src="https://i.ibb.co/kVjYjt9g/Messenger-creation-CEB052-AB-D925-4-BF5-8-DA5-2414-BFE1666-D.jpg" alt="PromptPay QR"><span class="muted small">ตรวจสอบชื่อผู้รับก่อนโอนทุกครั้ง</span></div>
+          </div>
+          <form id="topupForm" class="form-grid"><label>จำนวนเงิน (บาท)<input name="amount" type="number" min="1" max="50000" step="0.01" required placeholder="เช่น 100"></label><label>ช่องทางชำระ<select name="method"><option value="promptpay">PromptPay</option><option value="truemoney">TrueMoney</option></select></label><label class="full">แนบสลิปโอนเงิน<input name="slip" type="file" accept="image/png,image/jpeg,image/webp" required></label><button class="btn btn-primary full" type="submit">ส่งสลิปเพื่อตรวจสอบ</button></form>
+          <p class="notice">การแนบสลิปจะสร้างรายการรอตรวจสอบเท่านั้น ระบบจะไม่เติมเงินอัตโนมัติจากรูปภาพ เพื่อป้องกันสลิปปลอม</p>
+        </div>
+      </div>
+      <div class="panel"><h3>รายการเติมเงินล่าสุด</h3><div id="topupHistory" class="history-list"><span class="muted">เข้าสู่ระบบเพื่อดูรายการ</span></div></div>
+    </section>
+    <section id="ordersPage" class="page hidden"><div class="section-head"><div><div class="eyebrow">PURCHASE HISTORY</div><h2>ประวัติคำสั่งซื้อ</h2></div></div><div class="panel"><div id="ordersList" class="history-list"><span class="muted">เข้าสู่ระบบเพื่อดูคำสั่งซื้อ</span></div></div></section>
+    <section id="adminPage" class="page hidden"><div class="section-head"><div><div class="eyebrow">STORE CONTROL</div><h2>จัดการร้านค้า</h2></div></div>
+      <div class="admin-grid"><div class="panel"><h3>เพิ่มสินค้า</h3><form id="productForm" class="form-grid"><label>ชื่อสินค้า<input name="name" required maxlength="100"></label><label>ราคา (บาท)<input name="price" type="number" min="0" step="0.01" required></label><label>หมวดหมู่<input name="category" value="ทั่วไป"></label><label>จำนวนสต็อก<input name="stock" type="number" min="0" placeholder="เว้นว่าง = ไม่จำกัด"></label><label class="full">รายละเอียด<textarea name="description" rows="3"></textarea></label><label class="full">ลิงก์รูปภาพ<input name="image_url" type="url" placeholder="https://..."></label><label>รูปแบบส่งมอบ<select name="delivery_type"><option value="manual">ส่งมอบด้วยตนเอง</option><option value="text">ข้อความอัตโนมัติ</option><option value="license">License</option></select></label><label class="full">ข้อมูลส่งมอบ (เก็บเป็นข้อมูลส่วนตัว)<textarea name="delivery_payload" rows="3"></textarea></label><button class="btn btn-primary full">เพิ่มสินค้า</button></form></div>
+      <div class="panel"><h3>รายการเติมเงินรอตรวจสอบ</h3><div id="adminTopups" class="history-list">กำลังโหลด...</div></div></div>
+      <div class="panel"><h3>สินค้าทั้งหมด</h3><div id="adminProducts" class="history-list"></div></div>
+    </section>
+  </main>
+  <footer><span class="brand-mark small-mark">P</span><span>PRYVEX STORE</span><span class="muted">© 2026 · Digital goods marketplace</span></footer>
+  <div id="toast" class="toast"></div>
+  <script type="module" src="./app.js"></script>
+</body></html>
