@@ -131,7 +131,7 @@ async function buyProduct(id,button){
   if(deliveryPayload){
    const keyNumber=Number(data?.key_number||0);
    const heading=purchasedDeliveryType==='license'?'คีย์สินค้าที่คุณได้รับ'+(keyNumber?' · ลำดับที่ '+keyNumber:''):'ข้อมูลสินค้าที่ซื้อ';
-   deliveryBox.innerHTML='<div class="redeem-delivery-heading">'+heading+'</div><pre class="redeem-key">'+esc(deliveryPayload)+'</pre><button class="btn-mini" type="button" data-copy="'+esc(deliveryPayload)+'">คัดลอกข้อมูล</button>';
+   deliveryBox.innerHTML='<div class="redeem-delivery-heading">'+heading+'</div><pre class="redeem-key">'+esc(deliveryPayload)+'</pre><button class="btn-mini" type="button" data-copy="'+esc(deliveryPayload)+'">คัดลอกเฉพาะคีย์</button>';
    deliveryBox.classList.remove('hidden');
   }else{
    deliveryBox.innerHTML='<div class="muted small">สินค้านี้ไม่มีคีย์อัตโนมัติ กรุณาติดต่อแอดมินเพื่อรับสินค้า</div>';
