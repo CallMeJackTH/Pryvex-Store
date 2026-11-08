@@ -67,8 +67,8 @@ async function loadAdmin(){
  if(!isAdmin){toast('ไม่มีสิทธิ์เข้าถึง');page('shop');return}
  const {data:rows}=await supabase.from('store_topups').select('id,user_id,amount,payment_method,slip_path,created_at,verification_status,verification_amount,verification_reference,verification_duplicate,verification_receiver_match,verification_error,verification_result').eq('status','pending').order('created_at',{ascending:true});
  $('adminTopups').innerHTML=rows?.length?await Promise.all(rows.map(async r=>{const {data}=await supabase.storage.from('store-slips').createSignedUrl(r.slip_path,300);const verifyLabel=({verified:'EasySlip: ผ่าน',failed:'EasySlip: ไม่ผ่าน',error:'EasySlip: ตรวจไม่ได้',not_checked:'ยังไม่ตรวจ'})[r.verification_status]||'ยังไม่ตรวจ';const verifyClass=r.verification_status==='verified'?'approved':r.verification_status==='failed'?'rejected':'';const verifyInfo=r.verification_status==='verified'?'ยอดในสลิป '+money(r.verification_amount)+(r.verification_reference?' · Ref '+esc(r.verification_reference):''):(r.verification_error?esc(r.verification_error):'รอผลตรวจสอบ');return '<div class="history-row"><div><b>'+money(r.amount)+' · '+esc(r.payment_method)+'</b><div class="muted">'+esc(r.user_id)+' · '+new Date(r.created_at).toLocaleString('th-TH')+'</div><div class="status '+verifyClass+'">'+verifyLabel+'</div><div class="muted">'+verifyInfo+'</div>'+(r.verification_duplicate?'<div class="status rejected">พบสลิปซ้ำ</div>':'')+(r.verification_receiver_match===false?'<div class="status rejected">บัญชีผู้รับไม่ตรง</div>':'')+(data?.signedUrl?'<a class="slip-preview-link" target="_blank" rel="noopener" href="'+esc(data.signedUrl)+'"><img class="slip-thumb" src="'+esc(data.signedUrl)+'" alt="สลิปแนบ">เปิดดูสลิปขนาดเต็ม</a>':'')+'</div><div class="inline-actions"><button class="btn-mini" data-review="'+r.id+'" data-approve="true">อนุมัติ</button><button class="btn-mini btn-danger" data-review="'+r.id+'" data-approve="false">ปฏิเสธ</button></div></div>'}).join('')):'<span class="muted">ไม่มีรายการรอตรวจสอบ</span>';
- const {data:products}=await supabase.from('store_products').select('id,name,price,is_active').order('created_at',{ascending:false});
- $('adminProducts').innerHTML=products?.length?products.map(p=>'<div class="history-row"><div><b>'+esc(p.name)+'</b><div class="muted">'+money(p.price)+' · '+(p.is_active?'เปิดขาย':'ปิดขาย')+'</div></div><button class="btn-mini btn-danger" data-delete="'+p.id+'">ลบสินค้า</button></div>').join(''):'<span class="muted">ยังไม่มีสินค้า</span>';
+ const {data:products}=await supabase.from('store_products').select('id,name,price,stock,is_active').order('created_at',{ascending:false});
+ $('adminProducts').innerHTML=products?.length?products.map(p=>'<div class="history-row product-admin-row"><div><b>'+esc(p.name)+'</b><div class="muted">'+money(p.price)+' · '+(p.stock===null?'สต็อกไม่จำกัด':'คงเหลือ '+p.stock+' ชิ้น')+' · '+(p.is_active?'เปิดขาย':'ปิดขาย')+'</div></div><div class="inline-actions"><button class="btn-mini" data-edit="'+p.id+'">แก้ไข / เพิ่มสต็อก</button><button class="btn-mini btn-danger" data-delete="'+p.id+'">ลบ</button></div></div>').join(''):'<span class="muted">ยังไม่มีสินค้า</span>';
 }
 async function reviewTopup(id,approve){
  const note=prompt(approve?'หมายเหตุ (ถ้ามี)':'ระบุเหตุผลที่ปฏิเสธ')||'';
@@ -82,25 +82,56 @@ async function addProduct(e){
  let imageUrl=f.get('image_url')||null;
  const imageFile=f.get('image_file');
  if(imageFile && imageFile.size){
-  if(imageFile.size>5*1024*1024){toast('รูปสินค้าต้องไม่เกิน 5 MB');return}
-  if(!['image/jpeg','image/png','image/webp'].includes(imageFile.type)){toast('รองรับรูป JPG, PNG และ WEBP');return}
-  const {data:{session}}=await supabase.auth.getSession();
-  const uploadData=new FormData();uploadData.append('image',imageFile);
-  let uploadResponse;
-  try{uploadResponse=await fetch('/api/imgbb-upload',{method:'POST',headers:{Authorization:'Bearer '+session.access_token},body:uploadData})}catch{toast('เชื่อมต่อระบบอัปโหลดไม่สำเร็จ');return}
-  const uploadResult=await uploadResponse.json().catch(()=>({}));
-  if(!uploadResponse.ok||!uploadResult.url){toast(uploadResult.error||'อัปโหลดรูปไม่สำเร็จ');return}
-  imageUrl=uploadResult.url;
+  try{imageUrl=await uploadProductImage(imageFile)}catch(err){toast(err.message);return}
  }
  const row={name:f.get('name').trim(),price:Number(f.get('price')),category:f.get('category')||'ทั่วไป',description:f.get('description')||'',image_url:imageUrl,stock:stock===''?null:Number(stock),delivery_type:f.get('delivery_type'),delivery_payload:f.get('delivery_payload')||null,is_active:true};
  const {error}=await supabase.from('store_products').insert(row);
  if(error){toast('เพิ่มสินค้าไม่สำเร็จ: '+error.message);return}
  e.currentTarget.reset();toast('เพิ่มสินค้าแล้ว');await loadProducts();await loadAdmin();
 }
+async function uploadProductImage(file){
+ if(!file||!file.size)return null;
+ if(file.size>5*1024*1024)throw new Error('รูปสินค้าต้องไม่เกิน 5 MB');
+ if(!['image/jpeg','image/png','image/webp'].includes(file.type))throw new Error('รองรับรูป JPG, PNG และ WEBP');
+ const {data:{session}}=await supabase.auth.getSession();
+ if(!session?.access_token)throw new Error('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่');
+ const body=new FormData();body.append('image',file);
+ const response=await fetch('/api/imgbb-upload',{method:'POST',headers:{Authorization:'Bearer '+session.access_token},body});
+ const result=await response.json().catch(()=>({}));
+ if(!response.ok||!result.url)throw new Error(result.error||'อัปโหลดรูปไม่สำเร็จ');
+ return result.url;
+}
+async function editProduct(id){
+ const {data:p,error}=await supabase.from('store_products').select('id,name,description,category,price,image_url,stock,delivery_type,delivery_payload,is_active').eq('id',id).single();
+ if(error||!p){toast('โหลดข้อมูลสินค้าไม่สำเร็จ');return}
+ const form=$('editProductForm');
+ form.elements.id.value=p.id;form.elements.name.value=p.name||'';form.elements.price.value=p.price;
+ form.elements.category.value=p.category||'ทั่วไป';form.elements.stock.value=p.stock===null?'':p.stock;
+ form.elements.description.value=p.description||'';form.elements.image_url.value=p.image_url||'';
+ form.elements.delivery_type.value=p.delivery_type||'manual';form.elements.delivery_payload.value=p.delivery_payload||'';
+ form.elements.is_active.checked=!!p.is_active;form.elements.image_file.value='';
+ $('editProductModal').classList.remove('hidden');
+}
+async function saveProductEdit(e){
+ e.preventDefault();if(!isAdmin)return;
+ const f=e.currentTarget, data=new FormData(f), id=data.get('id');
+ const row={name:String(data.get('name')||'').trim(),price:Number(data.get('price')),category:data.get('category')||'ทั่วไป',description:data.get('description')||'',stock:data.get('stock')===''?null:Number(data.get('stock')),delivery_type:data.get('delivery_type'),delivery_payload:data.get('delivery_payload')||null,is_active:f.elements.is_active.checked,updated_at:new Date().toISOString()};
+ if(!row.name||!Number.isFinite(row.price)||row.price<0||(!Number.isInteger(row.stock)&&row.stock!==null)||row.stock<0){toast('กรุณาตรวจสอบชื่อ ราคา และจำนวนสต็อก');return}
+ try{
+  const file=f.elements.image_file.files[0];
+  if(file&&file.size)row.image_url=await uploadProductImage(file);
+  else row.image_url=data.get('image_url')||null;
+ }catch(err){toast(err.message);return}
+ const {error}=await supabase.from('store_products').update(row).eq('id',id);
+ if(error){toast('บันทึกสินค้าไม่สำเร็จ: '+error.message);return}
+ $('editProductModal').classList.add('hidden');toast('บันทึกสินค้าและสต็อกแล้ว');await loadProducts();await loadAdmin();
+}
 async function deleteProduct(id){if(!confirm('ต้องการลบสินค้านี้หรือไม่?'))return;const {error}=await supabase.from('store_products').delete().eq('id',id);if(error){toast(error.message);return}toast('ลบสินค้าแล้ว');await loadProducts();await loadAdmin()}
 $('loginBtn').addEventListener('click',async()=>{const {error}=await supabase.auth.signInWithOAuth({provider:'discord',options:{redirectTo:location.origin}});if(error)toast(error.message)});
 $('logoutBtn').addEventListener('click',async()=>{await supabase.auth.signOut();toast('ออกจากระบบแล้ว')});
-$('topupForm').addEventListener('submit',submitTopup);$('productForm').addEventListener('submit',addProduct);
-document.addEventListener('click',e=>{const n=e.target.closest('[data-page]');if(n)page(n.dataset.page);const go=e.target.closest('[data-go]');if(go)page(go.dataset.go);const buy=e.target.closest('[data-buy]');if(buy)buyProduct(buy.dataset.buy);const rev=e.target.closest('[data-review]');if(rev)reviewTopup(rev.dataset.review,rev.dataset.approve==='true');const del=e.target.closest('[data-delete]');if(del)deleteProduct(del.dataset.delete);const copy=e.target.closest('[data-copy]');if(copy){navigator.clipboard.writeText(copy.dataset.copy);toast('คัดลอกแล้ว')}});
+$('topupForm').addEventListener('submit',submitTopup);$('productForm').addEventListener('submit',addProduct);$('editProductForm').addEventListener('submit',saveProductEdit);
+$('closeEditProduct').addEventListener('click',()=>$('editProductModal').classList.add('hidden'));
+$('cancelEditProduct').addEventListener('click',()=>$('editProductModal').classList.add('hidden'));
+document.addEventListener('click',e=>{const n=e.target.closest('[data-page]');if(n)page(n.dataset.page);const go=e.target.closest('[data-go]');if(go)page(go.dataset.go);const buy=e.target.closest('[data-buy]');if(buy)buyProduct(buy.dataset.buy);const rev=e.target.closest('[data-review]');if(rev)reviewTopup(rev.dataset.review,rev.dataset.approve==='true');const edit=e.target.closest('[data-edit]');if(edit)editProduct(edit.dataset.edit);const del=e.target.closest('[data-delete]');if(del)deleteProduct(del.dataset.delete);const copy=e.target.closest('[data-copy]');if(copy){navigator.clipboard.writeText(copy.dataset.copy);toast('คัดลอกแล้ว')}});
 supabase.auth.onAuthStateChange(()=>setTimeout(refreshSession,0));
 await refreshSession();await loadProducts();
