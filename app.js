@@ -88,7 +88,7 @@ async function submitTopup(e){
 async function loadAdmin(){
  if(!isAdmin){toast('ไม่มีสิทธิ์เข้าถึง');page('shop');return}
  const {data:rows}=await supabase.from('store_topups').select('id,user_id,amount,payment_method,slip_path,created_at,verification_status,verification_amount,verification_reference,verification_duplicate,verification_receiver_match,verification_error,verification_result').eq('status','pending').order('created_at',{ascending:true});
- $('adminTopups').innerHTML=rows?.length?await Promise.all(rows.map(async r=>{
+ $('adminTopups').innerHTML=rows?.length?(await Promise.all(rows.map(async r=>{
   const {data}=await supabase.storage.from('store-slips').createSignedUrl(r.slip_path,300);
   const verifyLabel=({verified:'EasySlip: ผ่าน',failed:'EasySlip: ไม่ผ่าน',error:'EasySlip: ตรวจไม่ได้',not_checked:'ยังไม่ตรวจ'})[r.verification_status]||'ยังไม่ตรวจ';
   const retryButton=['not_checked','error',null,undefined].includes(r.verification_status)?'<button class="btn-mini" data-retry-verify="'+r.id+'">ตรวจ EasySlip ซ้ำ</button>':'';
@@ -96,7 +96,7 @@ async function loadAdmin(){
   const verifyInfo=r.verification_status==='verified'?'ยอดในสลิป '+money(r.verification_amount)+(r.verification_reference?' · Ref '+esc(r.verification_reference):''):(r.verification_error?esc(r.verification_error):'รอผลตรวจสอบ');
   const manualButton=data?.signedUrl?'<button class="btn-mini" data-manual-review="'+r.id+'" data-slip-url="'+esc(data.signedUrl)+'" data-amount="'+Number(r.amount)+'">ตรวจสอบเอง</button>':'';
   return '<div class="history-row"><div><b>'+money(r.amount)+' · '+esc(r.payment_method)+'</b><div class="muted">'+esc(r.user_id)+' · '+new Date(r.created_at).toLocaleString('th-TH')+'</div><div class="status '+verifyClass+'">'+verifyLabel+'</div><div class="muted">'+verifyInfo+'</div>'+(r.verification_duplicate?'<div class="status rejected">EasySlip แจ้งว่าสลิปซ้ำ</div>':'')+(r.verification_receiver_match===false?'<div class="status rejected">EasySlip แจ้งว่าบัญชีผู้รับไม่ตรง</div>':'')+(data?.signedUrl?'<a class="slip-preview-link" target="_blank" rel="noopener" href="'+esc(data.signedUrl)+'"><img class="slip-thumb" src="'+esc(data.signedUrl)+'" alt="สลิปแนบ">เปิดดูสลิปขนาดเต็ม</a>':'')+'</div><div class="inline-actions">'+manualButton+'<button class="btn-mini btn-danger" data-review="'+r.id+'" data-approve="false">ปฏิเสธ</button></div></div>'
- }).join('')):'<span class="muted">ไม่มีรายการรอตรวจสอบ</span>';
+ }))).join(''):'<span class="muted">ไม่มีรายการรอตรวจสอบ</span>';
  const {data:products}=await supabase.from('store_products').select('id,name,price,stock,is_active').order('created_at',{ascending:false});
  $('adminProducts').innerHTML=products?.length?products.map(p=>'<div class="history-row product-admin-row"><div><b>'+esc(p.name)+'</b><div class="muted">'+money(p.price)+' · '+(p.stock===null?'สต็อกไม่จำกัด':'คงเหลือ '+p.stock+' ชิ้น')+' · '+(p.is_active?'เปิดขาย':'ปิดขาย')+'</div></div><div class="inline-actions"><button class="btn-mini" data-edit="'+p.id+'">แก้ไข / เพิ่มสต็อก</button><button class="btn-mini btn-danger" data-delete="'+p.id+'">ลบ</button></div></div>').join(''):'<span class="muted">ยังไม่มีสินค้า</span>';
 }
