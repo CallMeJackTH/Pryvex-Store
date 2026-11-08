@@ -106,7 +106,7 @@ async function editProduct(id){
  if(error||!p){toast('โหลดข้อมูลสินค้าไม่สำเร็จ');return}
  const form=$('editProductForm');
  form.elements.id.value=p.id;form.elements.name.value=p.name||'';form.elements.price.value=p.price;
- form.elements.category.value=p.category||'ทั่วไป';form.elements.stock.value=p.stock===null?'':p.stock;
+ form.elements.category.value=p.category||'ทั่วไป';form.elements.stock.value=p.stock===null?'':p.stock;form.elements.current_stock.value=p.stock===null?'':p.stock;form.elements.stock_add.value='';
  form.elements.description.value=p.description||'';form.elements.image_url.value=p.image_url||'';
  form.elements.delivery_type.value=p.delivery_type||'manual';form.elements.delivery_payload.value=p.delivery_payload||'';
  form.elements.is_active.checked=!!p.is_active;form.elements.image_file.value='';
@@ -115,8 +115,12 @@ async function editProduct(id){
 async function saveProductEdit(e){
  e.preventDefault();if(!isAdmin)return;
  const f=e.currentTarget, data=new FormData(f), id=data.get('id');
- const row={name:String(data.get('name')||'').trim(),price:Number(data.get('price')),category:data.get('category')||'ทั่วไป',description:data.get('description')||'',stock:data.get('stock')===''?null:Number(data.get('stock')),delivery_type:data.get('delivery_type'),delivery_payload:data.get('delivery_payload')||null,is_active:f.elements.is_active.checked,updated_at:new Date().toISOString()};
- if(!row.name||!Number.isFinite(row.price)||row.price<0||(!Number.isInteger(row.stock)&&row.stock!==null)||row.stock<0){toast('กรุณาตรวจสอบชื่อ ราคา และจำนวนสต็อก');return}
+ let nextStock=data.get('stock')===''?null:Number(data.get('stock'));
+ const stockToAdd=Number(data.get('stock_add')||0),oldStock=data.get('current_stock');
+ if(!Number.isInteger(stockToAdd)||stockToAdd<0){toast('จำนวนที่เพิ่มต้องเป็นเลขจำนวนเต็มตั้งแต่ 0 ขึ้นไป');return}
+ if(stockToAdd>0){if(oldStock===''){toast('สินค้านี้ตั้งค่าเป็นสต็อกไม่จำกัด ให้กำหนดจำนวนสต็อกใหม่แทน');return}nextStock=Number(oldStock)+stockToAdd;}
+ const row={name:String(data.get('name')||'').trim(),price:Number(data.get('price')),category:data.get('category')||'ทั่วไป',description:data.get('description')||'',stock:nextStock,delivery_type:data.get('delivery_type'),delivery_payload:data.get('delivery_payload')||null,is_active:f.elements.is_active.checked,updated_at:new Date().toISOString()};
+ if(!row.name||!Number.isFinite(row.price)||row.price<0||(!Number.isInteger(row.stock)&&row.stock!==null)||(row.stock!==null&&row.stock<0)){toast('กรุณาตรวจสอบชื่อ ราคา และจำนวนสต็อก');return}
  try{
   const file=f.elements.image_file.files[0];
   if(file&&file.size)row.image_url=await uploadProductImage(file);
