@@ -50,10 +50,13 @@ async function refreshSession(){
  }catch(error){console.error('refreshSession:',error);toast('ตรวจสอบสถานะเข้าสู่ระบบไม่สำเร็จ: '+readableError(error))}
 }
 async function loadProducts(){
- const {data,error}=await supabase.from('store_products').select('id,name,description,category,price,image_url,stock,delivery_type,is_active').eq('is_active',true).order('created_at',{ascending:false});
- if(error){$('products').innerHTML='<div class="empty">โหลดสินค้าไม่สำเร็จ กรุณาลองใหม่</div>';return}
- $('productCount').textContent=(data?.length||0)+' รายการ';
- $('products').innerHTML=data?.length?data.map(p=>'<article class="product-card">'+(p.image_url?'<img class="product-image" src="'+esc(p.image_url)+'" alt="">':'<div class="product-image"></div>')+'<div class="product-body"><span class="eyebrow">'+esc(p.category||'ทั่วไป')+'</span><h3>'+esc(p.name)+'</h3><p>'+esc(p.description||'สินค้าดิจิทัลจาก Pryvex Store')+'</p><div class="product-meta"><strong class="price">'+money(p.price)+'</strong><button class="btn btn-primary" data-buy="'+p.id+'">ซื้อสินค้า</button></div></div></article>').join(''):'<div class="empty">ยังไม่มีสินค้าในร้าน</div>';
+ const target=$('products');target.innerHTML='<div class="empty">กำลังโหลดสินค้า...</div>';
+ try{
+  const {data,error}=await withTimeout(supabase.from('store_products').select('id,name,description,category,price,image_url,stock,delivery_type,is_active').eq('is_active',true).order('created_at',{ascending:false}),18000,'โหลดสินค้าใช้เวลานานเกินไป');
+  if(error)throw error;
+  $('productCount').textContent=(data?.length||0)+' รายการ';
+  target.innerHTML=data?.length?data.map(p=>'<article class="product-card">'+(p.image_url?'<img class="product-image" loading="lazy" decoding="async" src="'+esc(p.image_url)+'" alt="">':'<div class="product-image"></div>')+'<div class="product-body"><span class="eyebrow">'+esc(p.category||'ทั่วไป')+'</span><h3>'+esc(p.name)+'</h3><p>'+esc(p.description||'สินค้าดิจิทัลจาก Pryvex Store')+'</p><div class="product-meta"><strong class="price">'+money(p.price)+'</strong><button class="btn btn-primary" type="button" data-buy="'+p.id+'">ซื้อสินค้า</button></div></div></article>').join(''):'<div class="empty">ยังไม่มีสินค้าในร้าน</div>';
+ }catch(error){console.error('loadProducts:',error);$('productCount').textContent='โหลดไม่สำเร็จ';target.innerHTML='<div class="empty">โหลดสินค้าไม่สำเร็จ: '+esc(readableError(error))+' <button class="btn-mini" type="button" data-reload-products>ลองอีกครั้ง</button></div>'}
 }
 async function loadWallet(){
  if(!currentUser)return;
@@ -210,6 +213,18 @@ async function retrySlipVerification(id){
  }catch(error){toast('ตรวจ EasySlip ไม่สำเร็จ: '+readableError(error))}
  finally{await loadAdmin()}
 }
+function openManualReview(id,slipUrl,amount){
+ if(!isAdmin){toast('ไม่มีสิทธิ์เข้าถึง');return}
+ if(!slipUrl){toast('ไม่พบลิงก์สลิป กรุณารีเฟรชรายการ');return}
+ const form=$('manualReviewForm');
+ form.reset();
+ form.elements.topup_id.value=id;
+ form.elements.amount.value=money(amount);
+ const image=$('manualSlipImage');
+ image.onerror=()=>{image.removeAttribute('src');toast('เปิดรูปสลิปไม่ได้ กรุณารีเฟรชรายการ หรือตรวจสิทธิ์ Storage')};
+ image.src=slipUrl;
+ $('manualReviewModal').classList.remove('hidden');
+}
 async function submitManualReview(e){
  e.preventDefault();if(!isAdmin)return;
  const form=e.currentTarget,button=form.querySelector('button[type="submit"]'),oldText=button.textContent;
@@ -299,14 +314,14 @@ async function saveProductEdit(e){
  finally{setBusy(button,false,'',oldText)}
 }
 async function deleteProduct(id){if(!confirm('ต้องการลบสินค้านี้หรือไม่?'))return;try{const {error}=await supabase.from('store_products').delete().eq('id',id);if(error)throw error;toast('ลบสินค้าแล้ว');await loadProducts();await loadAdmin()}catch(error){toast('ลบสินค้าไม่สำเร็จ: '+readableError(error))}}
-$('loginBtn').addEventListener('click',async()=>{const {error}=await supabase.auth.signInWithOAuth({provider:'discord',options:{redirectTo:location.origin}});if(error)toast(error.message)});
-$('logoutBtn').addEventListener('click',async()=>{await supabase.auth.signOut();toast('ออกจากระบบแล้ว')});
+$('loginBtn').addEventListener('click',async()=>{const button=$('loginBtn');setBusy(button,true,'กำลังเชื่อมต่อ Discord...','เข้าสู่ระบบ Discord');try{const {error}=await supabase.auth.signInWithOAuth({provider:'discord',options:{redirectTo:location.origin}});if(error)throw error}catch(error){toast('เข้าสู่ระบบไม่สำเร็จ: '+readableError(error));setBusy(button,false,'','เข้าสู่ระบบ Discord')}});
+$('logoutBtn').addEventListener('click',async()=>{const button=$('logoutBtn');setBusy(button,true,'กำลังออกจากระบบ...','ออกจากระบบ');try{const {error}=await supabase.auth.signOut();if(error)throw error;toast('ออกจากระบบแล้ว')}catch(error){toast('ออกจากระบบไม่สำเร็จ: '+readableError(error));setBusy(button,false,'','ออกจากระบบ')}});
 $('topupForm').addEventListener('submit',submitTopup);$('productForm').addEventListener('submit',addProduct);$('editProductForm').addEventListener('submit',saveProductEdit);
 $('closeEditProduct').addEventListener('click',()=>$('editProductModal').classList.add('hidden'));
 $('cancelEditProduct').addEventListener('click',()=>$('editProductModal').classList.add('hidden'));
-$('manualReviewForm').addEventListener('submit',submitManualReview);
+$('manualReviewForm').addEventListener('submit',submitManualReview);$('refreshAdminTopups').addEventListener('click',()=>loadAdmin());
 $('closeManualReview').addEventListener('click',()=>$('manualReviewModal').classList.add('hidden'));
 $('cancelManualReview').addEventListener('click',()=>$('manualReviewModal').classList.add('hidden'));
-document.addEventListener('click',e=>{const n=e.target.closest('[data-page]');if(n)page(n.dataset.page);const go=e.target.closest('[data-go]');if(go)page(go.dataset.go);const buy=e.target.closest('[data-buy]');if(buy)buyProduct(buy.dataset.buy,buy);const retry=e.target.closest('[data-retry-verify]');if(retry)retrySlipVerification(retry.dataset.retryVerify);const refreshAdmin=e.target.closest('#refreshAdminTopups');if(refreshAdmin)loadAdmin();const manual=e.target.closest('[data-manual-review]');if(manual)openManualReview(manual.dataset.manualReview,manual.dataset.slipUrl,manual.dataset.amount);const rev=e.target.closest('[data-review]');if(rev)reviewTopup(rev.dataset.review,rev.dataset.approve==='true');const edit=e.target.closest('[data-edit]');if(edit)editProduct(edit.dataset.edit);const del=e.target.closest('[data-delete]');if(del)deleteProduct(del.dataset.delete);const copy=e.target.closest('[data-copy]');if(copy){const value=copy.dataset.copy;if(navigator.clipboard?.writeText){navigator.clipboard.writeText(value).then(()=>toast('คัดลอกแล้ว')).catch(()=>toast('คัดลอกไม่สำเร็จ กรุณาคัดลอกด้วยตนเอง: '+value))}else toast('เบราว์เซอร์ไม่รองรับการคัดลอกอัตโนมัติ: '+value)}});
+document.addEventListener('click',e=>{const n=e.target.closest('[data-page]');if(n)page(n.dataset.page);const go=e.target.closest('[data-go]');if(go)page(go.dataset.go);const buy=e.target.closest('[data-buy]');if(buy)buyProduct(buy.dataset.buy,buy);const retry=e.target.closest('[data-retry-verify]');if(retry)retrySlipVerification(retry.dataset.retryVerify);const reloadProducts=e.target.closest('[data-reload-products]');if(reloadProducts)loadProducts();const refreshAdmin=e.target.closest('#refreshAdminTopups');if(refreshAdmin)loadAdmin();const manual=e.target.closest('[data-manual-review]');if(manual)openManualReview(manual.dataset.manualReview,manual.dataset.slipUrl,manual.dataset.amount);const rev=e.target.closest('[data-review]');if(rev)reviewTopup(rev.dataset.review,rev.dataset.approve==='true');const edit=e.target.closest('[data-edit]');if(edit)editProduct(edit.dataset.edit);const del=e.target.closest('[data-delete]');if(del)deleteProduct(del.dataset.delete);const copy=e.target.closest('[data-copy]');if(copy){const value=copy.dataset.copy;if(navigator.clipboard?.writeText){navigator.clipboard.writeText(value).then(()=>toast('คัดลอกแล้ว')).catch(()=>toast('คัดลอกไม่สำเร็จ กรุณาคัดลอกด้วยตนเอง: '+value))}else toast('เบราว์เซอร์ไม่รองรับการคัดลอกอัตโนมัติ: '+value)}});
 supabase.auth.onAuthStateChange(()=>setTimeout(refreshSession,0));
 await refreshSession();await loadProducts();
