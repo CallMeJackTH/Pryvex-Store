@@ -99,9 +99,9 @@ async function loadOrders(){
  if(!requireLogin())return;
  const target=$('ordersList');target.innerHTML='<span class="muted">กำลังโหลดประวัติ...</span>';
  try{
-  const {data:orders,error}=await withTimeout(supabase.from('store_orders').select('id,total,status,created_at,store_order_items(product_name,quantity,delivery_payload)').eq('user_id',currentUser.id).order('created_at',{ascending:false}),20000,'โหลดประวัติใช้เวลานานเกินไป');
+  const {data:orders,error}=await withTimeout(supabase.from('store_orders').select('id,total,status,created_at,store_order_items(product_name,quantity,delivery_type,delivery_payload)').eq('user_id',currentUser.id).order('created_at',{ascending:false}),20000,'โหลดประวัติใช้เวลานานเกินไป');
   if(error)throw error;
-  target.innerHTML=orders?.length?orders.map(o=>'<div class="history-row"><div><b>คำสั่งซื้อ #'+esc(o.id.slice(0,8))+'</b><div class="muted">'+(o.store_order_items||[]).map(i=>esc(i.product_name)+' × '+i.quantity+(i.delivery_payload?' · '+esc(i.delivery_payload):'')).join('<br>')+'</div><div class="muted">'+new Date(o.created_at).toLocaleString('th-TH')+'</div></div><div><b>'+money(o.total)+'</b> <span class="status '+esc(o.status)+'">'+statusText(o.status)+'</span></div></div>').join(''):'<span class="muted">ยังไม่มีคำสั่งซื้อ</span>';
+  target.innerHTML=orders?.length?orders.map(o=>'<div class="history-row"><div><b>คำสั่งซื้อ #'+esc(o.id.slice(0,8))+'</b><div class="muted">'+(o.store_order_items||[]).map(i=>esc(i.product_name)+' × '+i.quantity+(i.delivery_payload?'<div class="delivery-payload">'+(i.delivery_type==='license'?'คีย์ที่ได้รับ: ':'')+esc(i.delivery_payload)+'</div>':'')).join('<br>')+'</div><div class="muted">'+new Date(o.created_at).toLocaleString('th-TH')+'</div></div><div><b>'+money(o.total)+'</b> <span class="status '+esc(o.status)+'">'+statusText(o.status)+'</span></div></div>').join(''):'<span class="muted">ยังไม่มีคำสั่งซื้อ</span>';
  }catch(error){console.error('loadOrders:',error);target.innerHTML='<span class="muted">โหลดประวัติไม่สำเร็จ: '+esc(readableError(error))+'</span>'}
 }
 async function buyProduct(id,button){
