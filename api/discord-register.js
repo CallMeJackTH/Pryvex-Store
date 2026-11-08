@@ -12,23 +12,31 @@ module.exports = async function handler(req, res) {
     return res.status(503).json({ error: "ยังไม่ได้ตั้งค่า DISCORD_BOT_TOKEN ใน Vercel" });
   }
 
-  try {
-    const response = await fetch(
-      "https://discord.com/api/v10/applications/" + APPLICATION_ID + "/commands",
-      {
-        method: "PUT",
-        headers: {
-          Authorization: "Bot " + token,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify([{
-          name: "test",
-          description: "ทดสอบสถานะบอท Pryvex Store",
-          type: 1
-        }])
-      }
-    );
+  const api = "https://discord.com/api/v10/applications/" + APPLICATION_ID + "/commands";
+  const headers = { Authorization: "Bot " + token, "Content-Type": "application/json" };
 
+  try {
+    // Keep any existing global slash commands; add or update only /test.
+    const listResponse = await fetch(api, { headers });
+    const existing = await listResponse.json().catch(() => []);
+    if (!listResponse.ok || !Array.isArray(existing)) {
+      console.error("Discord command list failed:", listResponse.status, existing);
+      return res.status(502).json({ error: "อ่านคำสั่ง Discord เดิมไม่สำเร็จ" });
+    }
+
+    const testCommand = {
+      name: "test",
+      description: "ทดสอบสถานะบอท Pryvex Store",
+      type: 1
+    };
+    const commands = existing.filter(command => command.name !== "test");
+    commands.push(testCommand);
+
+    const response = await fetch(api, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify(commands)
+    });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) {
       console.error("Discord command registration failed:", response.status, result);
