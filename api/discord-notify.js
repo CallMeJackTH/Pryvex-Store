@@ -78,6 +78,15 @@ module.exports = async function handler(req, res) {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
+        components: [{
+          type: 1,
+          components: [{
+            type: 2,
+            style: 5,
+            label: "ไปหน้าตรวจสลิป",
+            url: "https://pryvex-store.vercel.app/?page=admin"
+          }]
+        }],
         embeds: [{
           title: titles[event],
           description: descriptions[event],
