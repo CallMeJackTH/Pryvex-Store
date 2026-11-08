@@ -20,6 +20,21 @@ function setBusy(button, busy, busyText, normalText) {
  button.disabled = busy;
  button.textContent = busy ? busyText : normalText;
 }
+async function notifyDiscord(event, topupId){
+ try{
+  const {data:{session}}=await supabase.auth.getSession();
+  if(!session?.access_token)return;
+  const response=await fetch('/api/discord-notify',{
+   method:'POST',
+   headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},
+   body:JSON.stringify({event,topup_id:topupId})
+  });
+  if(!response.ok){
+   const result=await response.json().catch(()=>({}));
+   console.warn('Discord notification:',result.error||response.status);
+  }
+ }catch(error){console.warn('Discord notification failed:',error)}
+}
 const $ = (id) => document.getElementById(id);
 const money = (n) => new Intl.NumberFormat('th-TH',{style:'currency',currency:'THB'}).format(Number(n||0));
 const esc = (v='') => String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -128,6 +143,7 @@ async function submitTopup(e){
   );
   if(insertResult.error)throw new Error('บันทึกรายการไม่สำเร็จ: '+insertResult.error.message);
   const topupId=insertResult.data.id;
+  void notifyDiscord('topup_submitted',topupId);
   formElement.reset();
   toast('ส่งสลิปสำเร็จแล้ว! รายการถูกบันทึกและส่งให้แอดมินตรวจสอบ');
   void loadWallet();
@@ -271,6 +287,7 @@ async function reviewTopup(id,approve,noteOverride){
   if(error)throw error;
   if(data?.status!==(approve?'approved':'rejected'))throw new Error('ฐานข้อมูลไม่ได้ยืนยันผลการตรวจสอบ');
   toast(approve?'อนุมัติรายการแล้ว เครดิตเข้ากระเป๋าแล้ว':'ปฏิเสธรายการแล้ว');
+  void notifyDiscord(approve?'topup_approved':'topup_rejected',id);
   await loadAdmin();
   if(approve)void loadWallet();
   return true;
