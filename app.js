@@ -91,14 +91,14 @@ async function submitManualReview(e){
  if(required.some(k=>!f.get(k))){toast('กรุณายืนยันการตรวจสอบให้ครบทุกข้อ');return}
  const ref=String(f.get('reference')||'').trim();
  const note='ตรวจสอบด้วยแอดมินจากรายการเดินบัญชีแล้ว: ยืนยันว่าได้รับเงินจริง, ยอดตรง, ผู้รับตรง และไม่ใช่สลิปซ้ำ'+(ref?' · Ref: '+ref:'');
- await reviewTopup(f.get('topup_id'),true,note);
- $('manualReviewModal').classList.add('hidden');
+ const completed=await reviewTopup(f.get('topup_id'),true,note);
+ if(completed)$('manualReviewModal').classList.add('hidden');
 }
 async function reviewTopup(id,approve,noteOverride){
  const note=noteOverride??(prompt(approve?'หมายเหตุ (ถ้ามี)':'ระบุเหตุผลที่ปฏิเสธ')||'');
  const {error}=await supabase.rpc('store_review_topup',{p_topup_id:id,p_approve:approve,p_note:note});
- if(error){toast('ดำเนินการไม่สำเร็จ: '+error.message);return}
- toast(approve?'อนุมัติรายการแล้ว':'ปฏิเสธรายการแล้ว');await loadAdmin();
+ if(error){toast('ดำเนินการไม่สำเร็จ: '+error.message);return false}
+ toast(approve?'อนุมัติรายการแล้ว':'ปฏิเสธรายการแล้ว');await loadAdmin();return true;
 }
 async function addProduct(e){
  e.preventDefault();if(!isAdmin)return;
