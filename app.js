@@ -124,10 +124,10 @@ async function buyProduct(id,button){
  try{
   const {data,error}=await withTimeout(supabase.rpc('store_purchase_product',{p_product_id:id}),20000,'การสั่งซื้อใช้เวลานานเกินไป');
   if(error)throw error;
+  const deliveryType=String(data?.delivery_type||'');
   if(deliveryType==='license'&&data?.order_id)void notifyDiscord('key_purchased',data.order_id);
   const deliveryBox=$('redeemDelivery');
   const deliveryPayload=String(data?.delivery_payload||'').trim();
-  const deliveryType=String(data?.delivery_type||'');
   if(deliveryPayload){
    const keyNumber=Number(data?.key_number||0);
    const heading=deliveryType==='license'?'คีย์สินค้าที่คุณได้รับ'+(keyNumber?' · ลำดับที่ '+keyNumber:''):'ข้อมูลสินค้าที่ซื้อ';
