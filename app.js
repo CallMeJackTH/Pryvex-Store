@@ -53,14 +53,20 @@ async function submitTopup(e){
  const ext=file.name.split('.').pop().toLowerCase(),path=currentUser.id+'/'+crypto.randomUUID()+'.'+ext;
  const {error:uploadError}=await supabase.storage.from('store-slips').upload(path,file,{contentType:file.type,upsert:false});
  if(uploadError){toast('อัปโหลดสลิปไม่สำเร็จ: '+uploadError.message);return}
- const {error}=await supabase.from('store_topups').insert({user_id:currentUser.id,amount,payment_method:method,slip_path:path,status:'pending'});
+ const {data:topup,error}=await supabase.from('store_topups').insert({user_id:currentUser.id,amount,payment_method:method,slip_path:path,status:'pending'}).select('id').single();
  if(error){toast('บันทึกรายการไม่สำเร็จ: '+error.message);return}
- e.currentTarget.reset();toast('ส่งสลิปแล้ว รอแอดมินตรวจสอบ');await loadWallet();
+ e.currentTarget.reset();
+ const {data:verification,error:verificationError}=await supabase.functions.invoke('verify-store-slip',{body:{topup_id:topup.id}});
+ if(verificationError){toast('ส่งสลิปแล้ว แต่ระบบตรวจสอบอัตโนมัติขัดข้อง รายการยังรอ Admin ตรวจสอบ');}
+ else if(verification?.verification_status==='verified'){toast('ตรวจสอบสลิปผ่านแล้ว รอ Admin อนุมัติ');}
+ else if(verification?.verification_status==='failed'){toast('ระบบพบความผิดปกติ กรุณารอ Admin ตรวจสอบ');}
+ else{toast('ส่งสลิปแล้ว รายการรอ Admin ตรวจสอบ');}
+ await loadWallet();
 }
 async function loadAdmin(){
  if(!isAdmin){toast('ไม่มีสิทธิ์เข้าถึง');page('shop');return}
- const {data:rows}=await supabase.from('store_topups').select('id,user_id,amount,payment_method,slip_path,created_at').eq('status','pending').order('created_at',{ascending:true});
- $('adminTopups').innerHTML=rows?.length?await Promise.all(rows.map(async r=>{const {data}=await supabase.storage.from('store-slips').createSignedUrl(r.slip_path,300);return '<div class="history-row"><div><b>'+money(r.amount)+' · '+esc(r.payment_method)+'</b><div class="muted">'+esc(r.user_id)+' · '+new Date(r.created_at).toLocaleString('th-TH')+'</div>'+(data?.signedUrl?'<a class="slip-preview-link" target="_blank" rel="noopener" href="'+esc(data.signedUrl)+'"><img class="slip-thumb" src="'+esc(data.signedUrl)+'" alt="สลิปแนบ">เปิดดูสลิปขนาดเต็ม</a>':'')+'</div><div class="inline-actions"><button class="btn-mini" data-review="'+r.id+'" data-approve="true">อนุมัติ</button><button class="btn-mini btn-danger" data-review="'+r.id+'" data-approve="false">ปฏิเสธ</button></div></div>'}).join('')):'<span class="muted">ไม่มีรายการรอตรวจสอบ</span>';
+ const {data:rows}=await supabase.from('store_topups').select('id,user_id,amount,payment_method,slip_path,created_at,verification_status,verification_amount,verification_reference,verification_duplicate,verification_receiver_match,verification_error,verification_result').eq('status','pending').order('created_at',{ascending:true});
+ $('adminTopups').innerHTML=rows?.length?await Promise.all(rows.map(async r=>{const {data}=await supabase.storage.from('store-slips').createSignedUrl(r.slip_path,300);const verifyLabel=({verified:'EasySlip: ผ่าน',failed:'EasySlip: ไม่ผ่าน',error:'EasySlip: ตรวจไม่ได้',not_checked:'ยังไม่ตรวจ'})[r.verification_status]||'ยังไม่ตรวจ';const verifyClass=r.verification_status==='verified'?'approved':r.verification_status==='failed'?'rejected':'';const verifyInfo=r.verification_status==='verified'?'ยอดในสลิป '+money(r.verification_amount)+(r.verification_reference?' · Ref '+esc(r.verification_reference):''):(r.verification_error?esc(r.verification_error):'รอผลตรวจสอบ');return '<div class="history-row"><div><b>'+money(r.amount)+' · '+esc(r.payment_method)+'</b><div class="muted">'+esc(r.user_id)+' · '+new Date(r.created_at).toLocaleString('th-TH')+'</div><div class="status '+verifyClass+'">'+verifyLabel+'</div><div class="muted">'+verifyInfo+'</div>'+(r.verification_duplicate?'<div class="status rejected">พบสลิปซ้ำ</div>':'')+(r.verification_receiver_match===false?'<div class="status rejected">บัญชีผู้รับไม่ตรง</div>':'')+(data?.signedUrl?'<a class="slip-preview-link" target="_blank" rel="noopener" href="'+esc(data.signedUrl)+'"><img class="slip-thumb" src="'+esc(data.signedUrl)+'" alt="สลิปแนบ">เปิดดูสลิปขนาดเต็ม</a>':'')+'</div><div class="inline-actions"><button class="btn-mini" data-review="'+r.id+'" data-approve="true">อนุมัติ</button><button class="btn-mini btn-danger" data-review="'+r.id+'" data-approve="false">ปฏิเสธ</button></div></div>'}).join('')):'<span class="muted">ไม่มีรายการรอตรวจสอบ</span>';
  const {data:products}=await supabase.from('store_products').select('id,name,price,is_active').order('created_at',{ascending:false});
  $('adminProducts').innerHTML=products?.length?products.map(p=>'<div class="history-row"><div><b>'+esc(p.name)+'</b><div class="muted">'+money(p.price)+' · '+(p.is_active?'เปิดขาย':'ปิดขาย')+'</div></div><button class="btn-mini btn-danger" data-delete="'+p.id+'">ลบสินค้า</button></div>').join(''):'<span class="muted">ยังไม่มีสินค้า</span>';
 }
