@@ -36,3 +36,7 @@ button:disabled{opacity:.58;cursor:wait;filter:saturate(.65);transform:none!impo
 @media(prefers-reduced-motion:reduce){
  *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
+
+
+/* Keep each delivered license key on its own visible line. */
+.delivery-payload{white-space:pre-wrap;overflow-wrap:anywhere;margin-top:5px;color:#c9c2ff;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;line-height:1.7}
