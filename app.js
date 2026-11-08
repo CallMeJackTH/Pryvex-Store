@@ -20,7 +20,7 @@ function setBusy(button, busy, busyText, normalText) {
  button.disabled = busy;
  button.textContent = busy ? busyText : normalText;
 }
-async function notifyDiscord(event, topupId){
+async function notifyDiscord(event, referenceId){
  try{
   const {data:{session}}=await supabase.auth.getSession();
   if(!session?.access_token){
@@ -30,7 +30,7 @@ async function notifyDiscord(event, topupId){
   const response=await fetch('/api/discord-notify',{
    method:'POST',
    headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},
-   body:JSON.stringify({event,topup_id:topupId})
+   body:JSON.stringify({event,topup_id:referenceId,order_id:referenceId})
   });
   const result=await response.json().catch(()=>({}));
   if(!response.ok){
@@ -124,11 +124,13 @@ async function buyProduct(id,button){
  try{
   const {data,error}=await withTimeout(supabase.rpc('store_purchase_product',{p_product_id:id}),20000,'การสั่งซื้อใช้เวลานานเกินไป');
   if(error)throw error;
+  if(deliveryType==='license'&&data?.order_id)void notifyDiscord('key_purchased',data.order_id);
   const deliveryBox=$('redeemDelivery');
   const deliveryPayload=String(data?.delivery_payload||'').trim();
   const deliveryType=String(data?.delivery_type||'');
   if(deliveryPayload){
-   const heading=deliveryType==='license'?'คีย์สินค้าที่คุณได้รับ':'ข้อมูลสินค้าที่ซื้อ';
+   const keyNumber=Number(data?.key_number||0);
+   const heading=deliveryType==='license'?'คีย์สินค้าที่คุณได้รับ'+(keyNumber?' · ลำดับที่ '+keyNumber:''):'ข้อมูลสินค้าที่ซื้อ';
    deliveryBox.innerHTML='<div class="redeem-delivery-heading">'+heading+'</div><pre class="redeem-key">'+esc(deliveryPayload)+'</pre><button class="btn-mini" type="button" data-copy="'+esc(deliveryPayload)+'">คัดลอกข้อมูล</button>';
    deliveryBox.classList.remove('hidden');
   }else{
@@ -394,7 +396,7 @@ $('loginBtn').addEventListener('click',async()=>{const button=$('loginBtn');setB
 $('logoutBtn').addEventListener('click',async()=>{const button=$('logoutBtn');setBusy(button,true,'กำลังออกจากระบบ...','ออกจากระบบ');try{const {error}=await supabase.auth.signOut();if(error)throw error;toast('ออกจากระบบแล้ว')}catch(error){toast('ออกจากระบบไม่สำเร็จ: '+readableError(error));setBusy(button,false,'','ออกจากระบบ')}});
 $('topupForm').addEventListener('submit',submitTopup);$('productForm').addEventListener('submit',addProduct);$('editProductForm').addEventListener('submit',saveProductEdit);
 $('closeRedeemModal').addEventListener('click',()=>$('redeemModal').classList.add('hidden'));
-$('openRedeemLink').addEventListener('click',()=>window.open('https://discord.gg/rVePFb4zZe','_blank','noopener,noreferrer'));
+$('openRedeemLink').addEventListener('click',()=>window.open('https://discord.gg/pv2MyYwcht','_blank','noopener,noreferrer'));
 $('redeemModal').addEventListener('click',e=>{if(e.target===$('redeemModal'))$('redeemModal').classList.add('hidden')});
 $('closeEditProduct').addEventListener('click',()=>$('editProductModal').classList.add('hidden'));
 $('cancelEditProduct').addEventListener('click',()=>$('editProductModal').classList.add('hidden'));
