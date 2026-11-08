@@ -23,17 +23,28 @@ function setBusy(button, busy, busyText, normalText) {
 async function notifyDiscord(event, topupId){
  try{
   const {data:{session}}=await supabase.auth.getSession();
-  if(!session?.access_token)return;
+  if(!session?.access_token){
+   console.warn('Discord notification skipped: no active session');
+   return false;
+  }
   const response=await fetch('/api/discord-notify',{
    method:'POST',
    headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},
    body:JSON.stringify({event,topup_id:topupId})
   });
+  const result=await response.json().catch(()=>({}));
   if(!response.ok){
-   const result=await response.json().catch(()=>({}));
-   console.warn('Discord notification:',result.error||response.status);
+   const reason=result.error||('HTTP '+response.status);
+   console.warn('Discord notification failed:',reason,result);
+   if(event==='topup_submitted')toast('บันทึกคำขอเติมเงินแล้ว แต่แจ้ง Discord ไม่สำเร็จ: '+reason);
+   return false;
   }
- }catch(error){console.warn('Discord notification failed:',error)}
+  return true;
+ }catch(error){
+  console.warn('Discord notification failed:',error);
+  if(event==='topup_submitted')toast('บันทึกคำขอเติมเงินแล้ว แต่เชื่อมต่อ Discord ไม่สำเร็จ');
+  return false;
+ }
 }
 const $ = (id) => document.getElementById(id);
 const money = (n) => new Intl.NumberFormat('th-TH',{style:'currency',currency:'THB'}).format(Number(n||0));
