@@ -49,21 +49,36 @@ async function submitTopup(e){
  e.preventDefault();
  const formElement=e.currentTarget;
  if(!requireLogin())return;
- const f=new FormData(e.currentTarget),amount=Number(f.get('amount')),file=f.get('slip'),method=f.get('method');
+ const f=new FormData(formElement),amount=Number(f.get('amount')),file=f.get('slip'),method=f.get('method');
  if(!file||!file.size||file.size>4*1024*1024){toast('กรุณาแนบรูปสลิปไม่เกิน 4 MB (EasySlip)');return}
  if(!['image/jpeg','image/png','image/webp'].includes(file.type)){toast('รองรับไฟล์ JPG, PNG และ WEBP');return}
+ const submitButton=formElement.querySelector('button[type="submit"]');
+ if(submitButton?.disabled)return;
+ const originalButtonText=submitButton?.textContent||'ส่งสลิปเพื่อตรวจสอบ';
+ if(submitButton){submitButton.disabled=true;submitButton.textContent='กำลังส่งสลิป...'}
  const ext=file.name.split('.').pop().toLowerCase(),path=currentUser.id+'/'+crypto.randomUUID()+'.'+ext;
- const {error:uploadError}=await supabase.storage.from('store-slips').upload(path,file,{contentType:file.type,upsert:false});
- if(uploadError){toast('อัปโหลดสลิปไม่สำเร็จ: '+uploadError.message);return}
- const {data:topup,error}=await supabase.from('store_topups').insert({user_id:currentUser.id,amount,payment_method:method,slip_path:path,status:'pending'}).select('id').single();
- if(error){toast('บันทึกรายการไม่สำเร็จ: '+error.message);return}
- formElement.reset();
- const {data:verification,error:verificationError}=await supabase.functions.invoke('verify-store-slip',{body:{topup_id:topup.id}});
- if(verificationError){toast('ส่งสลิปแล้ว แต่ระบบตรวจสอบอัตโนมัติขัดข้อง รายการยังรอ Admin ตรวจสอบ');}
- else if(verification?.verification_status==='verified'){toast('ตรวจสอบสลิปผ่านแล้ว รอ Admin อนุมัติ');}
- else if(verification?.verification_status==='failed'){toast('ระบบพบความผิดปกติ กรุณารอ Admin ตรวจสอบ');}
- else{toast('ส่งสลิปแล้ว รายการรอ Admin ตรวจสอบ');}
- await loadWallet();
+ try{
+  const {error:uploadError}=await supabase.storage.from('store-slips').upload(path,file,{contentType:file.type,upsert:false});
+  if(uploadError){toast('อัปโหลดสลิปไม่สำเร็จ: '+uploadError.message);return}
+  const {data:topup,error}=await supabase.from('store_topups').insert({user_id:currentUser.id,amount,payment_method:method,slip_path:path,status:'pending'}).select('id').single();
+  if(error){
+   await supabase.storage.from('store-slips').remove([path]);
+   toast('บันทึกรายการไม่สำเร็จ: '+error.message);
+   return;
+  }
+  formElement.reset();
+  const {data:verification,error:verificationError}=await supabase.functions.invoke('verify-store-slip',{body:{topup_id:topup.id}});
+  if(verificationError){toast('ส่งสลิปแล้ว แต่ระบบตรวจสอบอัตโนมัติขัดข้อง รายการยังรอ Admin ตรวจสอบ');}
+  else if(verification?.verification_status==='verified'){toast('ตรวจสอบสลิปผ่านแล้ว รอ Admin อนุมัติ');}
+  else if(verification?.verification_status==='failed'){toast('ระบบพบความผิดปกติ กรุณารอ Admin ตรวจสอบ');}
+  else{toast('ส่งสลิปแล้ว รายการรอ Admin ตรวจสอบ');}
+  await loadWallet();
+ }catch(error){
+  console.error('submit topup:',error);
+  toast('เกิดข้อผิดพลาดขณะส่งสลิป: '+(error?.message||'กรุณาลองใหม่'));
+ }finally{
+  if(submitButton){submitButton.disabled=false;submitButton.textContent=originalButtonText}
+ }
 }
 async function loadAdmin(){
  if(!isAdmin){toast('ไม่มีสิทธิ์เข้าถึง');page('shop');return}
