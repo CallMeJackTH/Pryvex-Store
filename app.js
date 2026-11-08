@@ -222,6 +222,18 @@ async function retrySlipVerification(id){
  }catch(error){toast('ตรวจ EasySlip ไม่สำเร็จ: '+readableError(error))}
  finally{await loadAdmin()}
 }
+function openManualReview(id,slipUrl,amount){
+ if(!isAdmin){toast('ไม่มีสิทธิ์เข้าถึง');return}
+ if(!slipUrl){toast('ไม่พบลิงก์สลิป กรุณารีเฟรชรายการ');return}
+ const form=$('manualReviewForm');
+ form.reset();
+ form.elements.topup_id.value=id;
+ form.elements.amount.value=money(amount);
+ const image=$('manualSlipImage');
+ image.onerror=()=>{image.removeAttribute('src');toast('เปิดรูปสลิปไม่ได้ กรุณารีเฟรชรายการ หรือตรวจสิทธิ์ Storage')};
+ image.src=slipUrl;
+ $('manualReviewModal').classList.remove('hidden');
+}
 async function submitManualReview(e){
  e.preventDefault();if(!isAdmin)return;
  const form=e.currentTarget,button=form.querySelector('button[type="submit"]'),oldText=button.textContent;
