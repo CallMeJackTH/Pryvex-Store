@@ -70,7 +70,8 @@ async function refreshSession(){
    if(adminError)throw adminError;
    isAdmin=!!admin;$('adminNav').classList.toggle('hidden',!isAdmin);
    await loadWallet();
-   if(isAdmin&&!$('adminPage').classList.contains('hidden'))await loadAdmin();
+   if(isAdmin&&new URLSearchParams(location.search).get('page')==='admin')page('admin');
+   else if(isAdmin&&!$('adminPage').classList.contains('hidden'))await loadAdmin();
   }else{
    isAdmin=false;$('adminNav').classList.add('hidden');$('walletMini').classList.add('hidden');$('walletBalance').textContent='฿0.00';
    $('topupHistory').innerHTML='<span class="muted">เข้าสู่ระบบเพื่อดูรายการ</span>';
@@ -377,7 +378,7 @@ async function saveProductEdit(e){
  finally{setBusy(button,false,'',oldText)}
 }
 async function deleteProduct(id){if(!confirm('ต้องการลบสินค้านี้หรือไม่?'))return;try{const {error}=await supabase.from('store_products').delete().eq('id',id);if(error)throw error;toast('ลบสินค้าแล้ว');await loadProducts();await loadAdmin()}catch(error){toast('ลบสินค้าไม่สำเร็จ: '+readableError(error))}}
-$('loginBtn').addEventListener('click',async()=>{const button=$('loginBtn');setBusy(button,true,'กำลังเชื่อมต่อ Discord...','เข้าสู่ระบบ Discord');try{const {error}=await supabase.auth.signInWithOAuth({provider:'discord',options:{redirectTo:location.origin}});if(error)throw error}catch(error){toast('เข้าสู่ระบบไม่สำเร็จ: '+readableError(error));setBusy(button,false,'','เข้าสู่ระบบ Discord')}});
+$('loginBtn').addEventListener('click',async()=>{const button=$('loginBtn');setBusy(button,true,'กำลังเชื่อมต่อ Discord...','เข้าสู่ระบบ Discord');try{const {error}=await supabase.auth.signInWithOAuth({provider:'discord',options:{redirectTo:location.origin+location.pathname+location.search}});if(error)throw error}catch(error){toast('เข้าสู่ระบบไม่สำเร็จ: '+readableError(error));setBusy(button,false,'','เข้าสู่ระบบ Discord')}});
 $('logoutBtn').addEventListener('click',async()=>{const button=$('logoutBtn');setBusy(button,true,'กำลังออกจากระบบ...','ออกจากระบบ');try{const {error}=await supabase.auth.signOut();if(error)throw error;toast('ออกจากระบบแล้ว')}catch(error){toast('ออกจากระบบไม่สำเร็จ: '+readableError(error));setBusy(button,false,'','ออกจากระบบ')}});
 $('topupForm').addEventListener('submit',submitTopup);$('productForm').addEventListener('submit',addProduct);$('editProductForm').addEventListener('submit',saveProductEdit);
 $('closeEditProduct').addEventListener('click',()=>$('editProductModal').classList.add('hidden'));
